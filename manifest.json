@@ -1,0 +1,53 @@
+
+{
+  "name": "CargoBroker Logistics",
+  "short_name": "CargoBroker",
+  "description": "Professional Logistics Brokerage & AI Route Analysis",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "background_color": "#ffffff",
+  "theme_color": "#84cc16",
+  "orientation": "portrait",
+  "dir": "ltr",
+  "lang": "en-US",
+  "categories": ["business", "logistics", "productivity"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/cargo-192/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://picsum.photos/seed/cargo-maskable/192/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "https://picsum.photos/seed/cargo-512/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Request Quote",
+      "short_name": "New Quote",
+      "description": "Start a new cargo quote request",
+      "url": "./?action=new_quote",
+      "icons": [{ "src": "https://picsum.photos/seed/quote/96/96", "sizes": "96x96" }]
+    },
+    {
+      "name": "Track Shipments",
+      "short_name": "Tracking",
+      "description": "View live shipment status",
+      "url": "./?action=track",
+      "icons": [{ "src": "https://picsum.photos/seed/track/96/96", "sizes": "96x96" }]
+    }
+  ]
+}

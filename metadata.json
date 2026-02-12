@@ -1,0 +1,7 @@
+{
+  "name": "CargoBroker",
+  "description": "A streamlined logistics brokerage platform where clients can request shipping quotes and partners can manage incoming cargo requests with AI-enhanced route optimization and cargo analysis.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
