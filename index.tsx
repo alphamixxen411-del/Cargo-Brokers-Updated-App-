@@ -6,9 +6,10 @@ import App from './App';
 // Register Service Worker for PWA functionality (Android "APK" feel)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // Ensuring we use the correct relative path for the sw.js file
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('Service Worker registered', reg))
-      .catch(err => console.log('Service Worker registration failed', err));
+      .then(reg => console.log('CargoBroker: Service Worker active', reg))
+      .catch(err => console.error('CargoBroker: Service Worker failed', err));
   });
 }
 

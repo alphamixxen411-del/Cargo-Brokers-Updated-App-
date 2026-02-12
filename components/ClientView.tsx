@@ -83,7 +83,7 @@ const ClientView: React.FC<ClientViewProps> = ({
     const newErrors: Partial<Record<string, string>> = {};
     if (step === 'contact') {
       if (!formData.clientName.trim()) newErrors.clientName = "Required";
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) newErrors.clientEmail = "Invalid";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.clientEmail)) newErrors.clientEmail = "Invalid Email";
     } else if (step === 'route') {
       if (!formData.origin.trim()) newErrors.origin = "Required";
       if (!formData.destination.trim()) newErrors.destination = "Required";
@@ -116,7 +116,11 @@ const ClientView: React.FC<ClientViewProps> = ({
         ...formData,
         weight: submittedWeight, weightUnit: submittedUnit,
         id: `req-${Math.random().toString(36).substr(2, 9)}`,
-        clientId: 'client-001', status: RequestStatus.PENDING,
+        clientId: 'client-001', 
+        clientName: formData.clientName,
+        clientEmail: formData.clientEmail,
+        clientPhone: formData.clientPhone,
+        status: RequestStatus.PENDING,
         aiNotes: aiInsight, createdAt: new Date().toISOString()
       };
       
@@ -131,11 +135,18 @@ const ClientView: React.FC<ClientViewProps> = ({
     }
   };
 
-  const inputClasses = (field: string) => `w-full rounded-2xl border-2 px-4 py-3.5 text-sm font-bold transition-all duration-300 outline-none ${
+  const inputClasses = (field: string) => `w-full rounded-2xl border px-4 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
     errors[field] 
-    ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10' 
-    : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 focus:border-blue-500'
+    ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10 text-rose-900 dark:text-rose-100 placeholder:text-rose-300' 
+    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
   }`;
+
+  const Label = ({ htmlFor, children, error }: { htmlFor: string, children: string, error?: string }) => (
+    <div className="flex justify-between items-center mb-1.5 px-1">
+      <label htmlFor={htmlFor} className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{children}</label>
+      {error && <span className="text-[10px] font-black text-rose-500 uppercase tracking-tighter">{error}</span>}
+    </div>
+  );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start max-w-[1400px] mx-auto">
@@ -165,43 +176,81 @@ const ClientView: React.FC<ClientViewProps> = ({
             <div className="space-y-4">
               {currentStep === 'contact' && (
                 <>
-                  <input type="text" placeholder="Contact Name" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={inputClasses('clientName')} />
-                  <input type="email" placeholder="Email Address" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
-                  <input type="tel" placeholder="Phone" value={formData.clientPhone} onChange={e => setFormData({...formData, clientPhone: e.target.value})} className={inputClasses('clientPhone')} />
+                  <div>
+                    <Label htmlFor="clientName" error={errors.clientName}>Full Name</Label>
+                    <input id="clientName" type="text" placeholder="e.g. John Doe" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={inputClasses('clientName')} />
+                  </div>
+                  <div>
+                    <Label htmlFor="clientEmail" error={errors.clientEmail}>Email Address</Label>
+                    <input id="clientEmail" type="email" placeholder="e.g. john@example.com" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
+                  </div>
+                  <div>
+                    <Label htmlFor="clientPhone">Phone Number</Label>
+                    <input id="clientPhone" type="tel" placeholder="e.g. +1 555 0000" value={formData.clientPhone} onChange={e => setFormData({...formData, clientPhone: e.target.value})} className={inputClasses('clientPhone')} />
+                  </div>
                 </>
               )}
               {currentStep === 'route' && (
                 <>
-                  <input type="text" placeholder="Origin" value={formData.origin} onChange={e => setFormData({...formData, origin: e.target.value})} className={inputClasses('origin')} />
-                  <input type="text" placeholder="Destination" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} className={inputClasses('destination')} />
+                  <div>
+                    <Label htmlFor="origin" error={errors.origin}>Origin Location</Label>
+                    <input id="origin" type="text" placeholder="e.g. Mombasa, Kenya" value={formData.origin} onChange={e => setFormData({...formData, origin: e.target.value})} className={inputClasses('origin')} />
+                  </div>
+                  <div>
+                    <Label htmlFor="destination" error={errors.destination}>Final Destination</Label>
+                    <input id="destination" type="text" placeholder="e.g. Kampala, Uganda" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} className={inputClasses('destination')} />
+                  </div>
                   {(isPreFlightLoading || preFlightData) && (
                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/20">
-                      {isPreFlightLoading ? <p className="text-[9px] font-black animate-pulse">Checking...</p> : <p className="text-[9px] font-bold text-indigo-800 dark:text-indigo-300 italic">{preFlightData?.warning}</p>}
+                      {isPreFlightLoading ? <p className="text-[9px] font-black animate-pulse uppercase tracking-widest text-indigo-400">Checking Route...</p> : <p className="text-[9px] font-bold text-indigo-800 dark:text-indigo-300 italic">{preFlightData?.warning}</p>}
                     </div>
                   )}
                 </>
               )}
               {currentStep === 'cargo' && (
                 <>
-                  <select value={formData.cargoType} onChange={e => setFormData({...formData, cargoType: e.target.value})} className={inputClasses('cargoType')}>
-                    {CARGO_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <input type="number" placeholder="Weight (KG)" value={formData.weight || ''} onChange={e => setFormData({...formData, weight: Number(e.target.value)})} className={inputClasses('weight')} />
+                  <div>
+                    <Label htmlFor="cargoType">Cargo Classification</Label>
+                    <select id="cargoType" value={formData.cargoType} onChange={e => setFormData({...formData, cargoType: e.target.value})} className={inputClasses('cargoType')}>
+                      {CARGO_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="weight" error={errors.weight}>Total Weight (KG)</Label>
+                    <input id="weight" type="number" placeholder="0" value={formData.weight || ''} onChange={e => setFormData({...formData, weight: Number(e.target.value)})} className={inputClasses('weight')} />
+                  </div>
                 </>
               )}
               {currentStep === 'partner' && (
-                <div className="space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
+                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                  <Label htmlFor="partnerSelect">Select Preferred Carrier</Label>
                   {activePartners.map(p => (
-                    <button key={p.id} onClick={() => setFormData({...formData, partnerId: p.id})} className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-100 dark:border-slate-800'}`}>
-                      <p className="text-xs font-black">{p.name}</p>
+                    <button key={p.id} onClick={() => setFormData({...formData, partnerId: p.id})} className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center gap-3 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700'}`}>
+                      <div className={`w-3 h-3 rounded-full border-2 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-600' : 'border-slate-300 dark:border-slate-600'}`}></div>
+                      <div>
+                        <p className="text-xs font-black text-slate-900 dark:text-white">{p.name}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">{p.specialization}</p>
+                      </div>
                     </button>
                   ))}
                 </div>
               )}
               {currentStep === 'review' && (
-                <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl space-y-2">
-                  <p className="text-xs font-bold">{formData.origin} &rarr; {formData.destination}</p>
-                  <p className="text-[10px] text-slate-400 font-black uppercase">{formData.cargoType} · {formData.weight}kg</p>
+                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4">
+                  <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Route Hubs</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{formData.origin} &rarr; {formData.destination}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Payload</p>
+                      <p className="text-[10px] text-slate-900 dark:text-white font-black uppercase">{formData.cargoType}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Weight</p>
+                      <p className="text-[10px] text-slate-900 dark:text-white font-black uppercase">{formData.weight}kg</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -210,13 +259,13 @@ const ClientView: React.FC<ClientViewProps> = ({
 
         <div className="mt-10 flex gap-4">
           {currentStepIndex > 0 && (
-            <button onClick={() => setCurrentStep(steps[currentStepIndex - 1].id)} className="px-6 py-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-500">Back</button>
+            <button onClick={() => setCurrentStep(steps[currentStepIndex - 1].id)} className="px-6 py-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Back</button>
           )}
           <button 
             onClick={currentStep === 'review' ? handleSubmit : handleNext} 
-            className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"
+            className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 hover:bg-blue-700 transition-all"
           >
-            {currentStep === 'review' ? 'Finalize' : 'Continue'}
+            {currentStep === 'review' ? 'Finalize & Request' : 'Continue'}
           </button>
         </div>
       </div>
@@ -224,17 +273,23 @@ const ClientView: React.FC<ClientViewProps> = ({
       <div className="lg:col-span-2 space-y-6">
         <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest">Active Pipeline</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {requests.map(req => (
-            <RequestCard 
-              key={req.id} 
-              request={req} 
-              partnerName={partners.find(p => p.id === req.partnerId)?.name || 'Carrier'} 
-              partner={partners.find(p => p.id === req.partnerId)} 
-              showClientActions={true} 
-              onUpdateStatus={onUpdateStatus} 
-              paymentMethods={paymentMethods}
-            />
-          ))}
+          {requests.length === 0 ? (
+            <div className="md:col-span-2 p-12 bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-center">
+              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">No Active Shipments Detected</p>
+            </div>
+          ) : (
+            requests.map(req => (
+              <RequestCard 
+                key={req.id} 
+                request={req} 
+                partnerName={partners.find(p => p.id === req.partnerId)?.name || 'Carrier'} 
+                partner={partners.find(p => p.id === req.partnerId)} 
+                showClientActions={true} 
+                onUpdateStatus={onUpdateStatus} 
+                paymentMethods={paymentMethods}
+              />
+            ))
+          )}
         </div>
       </div>
     </div>
