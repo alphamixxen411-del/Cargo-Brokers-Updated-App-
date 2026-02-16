@@ -1,4 +1,3 @@
-
 export enum RequestStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
@@ -57,6 +56,7 @@ export interface CargoQuoteRequest {
   partnerId: string;
   status: RequestStatus;
   aiNotes?: string;
+  suggestedCurrency?: string; // Client's detected local currency
   quotedBasePrice?: number; // Partner's share
   brokerFee?: number;      // Platform's share
   brokerFeePercent?: number; // Percentage used
@@ -65,6 +65,8 @@ export interface CargoQuoteRequest {
   quotedNotes?: string;
   quotedTerms?: string;
   quotedLogo?: string;
+  quotedHeaderImage?: string;
+  quotedHeaderMessage?: string;
   includePartnerLogo?: boolean;
   quotedDetailsOrder?: string[];
   createdAt: string;

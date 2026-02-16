@@ -1,4 +1,3 @@
-
 import { jsPDF } from "jspdf";
 import { CargoQuoteRequest, LogisticsPartner } from "../types";
 
@@ -9,160 +8,240 @@ export const generateQuotePDF = (request: CargoQuoteRequest, partner: LogisticsP
   const margin = 20;
   let cursorY = 20;
 
-  // Header - Carrier Brand
-  doc.setFillColor(132, 204, 22); // #84cc16
-  doc.rect(0, 0, pageWidth, 40, 'F');
-  
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text(isPartnerView ? "SETTLEMENT STATEMENT" : partner.name.toUpperCase(), margin, 25);
-  
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(isPartnerView ? "COMMISSION BREAKDOWN" : partner.specialization.toUpperCase(), margin, 32);
+  // Global Colors
+  const BRAND_LIME = [132, 204, 22]; // #84cc16
+  const TEXT_DARK = [15, 23, 42];    // #0f172a
+  const TEXT_MUTED = [100, 116, 139]; // #64748b
+  const BORDER_LIGHT = [226, 232, 240]; // #e2e8f0
 
-  // Optional Partner Logo in header
-  if (request.includePartnerLogo && !isPartnerView) {
-    doc.setDrawColor(0, 0, 0);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin + 120, 8, 24, 24, 'F');
-    doc.setFontSize(6);
-    doc.setTextColor(150, 150, 150);
-    doc.text("CARRIER LOGO", margin + 122, 21);
+  // 1. Decorative Header Image or Accent Bar
+  if (request.quotedHeaderImage) {
+    try {
+      // If we have a header image, we try to render it. 
+      // Note: addImage works best with pre-fetched base64 or loaded images.
+      // For this dynamic implementation, we use an accent box as background if image fails or isn't base64.
+      doc.setFillColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2]);
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(32);
+      doc.setFont("helvetica", "bold");
+      doc.text(request.quotedHeaderMessage || "CARGO LOGISTICS", margin, 25);
+      cursorY = 55;
+    } catch (e) {
+      doc.setFillColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2]);
+      doc.rect(0, 0, pageWidth, 5, 'F');
+    }
+  } else {
+    doc.setFillColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2]);
+    doc.rect(0, 0, pageWidth, 5, 'F');
   }
 
-  // Quote Info
-  doc.setTextColor(255, 255, 255);
+  // Carrier Brand (Top Left)
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(`REF: ${request.id.toUpperCase()}`, pageWidth - margin, 25, { align: "right" });
+  doc.setFontSize(24);
+  doc.text(partner.name.toUpperCase(), margin, cursorY);
+  
+  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`DATE: ${new Date().toLocaleDateString()}`, pageWidth - margin, 32, { align: "right" });
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.text(partner.specialization.toUpperCase(), margin, cursorY + 7);
 
-  cursorY = 55;
+  // Document Title (Top Right)
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(isPartnerView ? "SETTLEMENT STATEMENT" : "CARGO INVOICE", pageWidth - margin, cursorY, { align: "right" });
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Ref: ${request.id.split('-').pop()?.toUpperCase()}`, pageWidth - margin, cursorY + 7, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.text(`Issued: ${new Date().toLocaleDateString()}`, pageWidth - margin, cursorY + 12, { align: "right" });
 
-  // Partner Info (Left)
-  doc.setTextColor(60, 60, 60);
+  if (request.quotedHeaderMessage && !request.quotedHeaderImage) {
+     doc.setFont("helvetica", "italic");
+     doc.setFontSize(10);
+     doc.setTextColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2]);
+     doc.text(request.quotedHeaderMessage, margin, cursorY + 15);
+     cursorY += 10;
+  }
+
+  cursorY += 35;
+
+  // 2. Address Blocks
+  // Sender (Carrier)
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.text("FROM CARRIER", margin, cursorY);
+  cursorY += 5;
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("FROM (CARRIER)", margin, cursorY);
-  cursorY += 7;
-  doc.setFont("helvetica", "normal");
   doc.text(partner.name, margin, cursorY);
   cursorY += 5;
-  doc.text(partner.location, margin, cursorY);
-  cursorY += 5;
-  doc.text(`P: ${partner.phone}`, margin, cursorY);
-  cursorY += 5;
-  doc.text(`E: ${partner.email}`, margin, cursorY);
-
-  // Client Info (Right)
-  let rightCursorY = 55;
-  doc.setFont("helvetica", "bold");
-  doc.text("TO (CLIENT)", pageWidth - margin, rightCursorY, { align: "right" });
-  rightCursorY += 7;
   doc.setFont("helvetica", "normal");
+  doc.text(partner.location, margin, cursorY);
+  doc.text(`P: ${partner.phone}`, margin, cursorY + 5);
+  doc.text(`E: ${partner.email}`, margin, cursorY + 10);
+
+  // Recipient (Client)
+  let rightCursorY = cursorY - 10;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.text("BILLED TO", pageWidth - margin, rightCursorY, { align: "right" });
+  rightCursorY += 5;
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
   doc.text(request.clientName, pageWidth - margin, rightCursorY, { align: "right" });
   rightCursorY += 5;
+  doc.setFont("helvetica", "normal");
   doc.text(request.clientEmail, pageWidth - margin, rightCursorY, { align: "right" });
-  rightCursorY += 5;
-  doc.text(request.clientPhone, pageWidth - margin, rightCursorY, { align: "right" });
+  doc.text(request.clientPhone || "", pageWidth - margin, rightCursorY + 5, { align: "right" });
 
-  cursorY = Math.max(cursorY, rightCursorY) + 20;
+  cursorY = Math.max(cursorY + 25, rightCursorY + 25);
 
-  // Shipment Details Section
-  doc.setDrawColor(230, 230, 230);
-  doc.line(margin, cursorY, pageWidth - margin, cursorY);
-  cursorY += 15;
-
-  doc.setFontSize(14);
+  // 3. Shipment Specifications Table
+  doc.setFillColor(248, 250, 252);
+  doc.rect(margin, cursorY, pageWidth - (margin * 2), 10, 'F');
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 0, 0);
-  doc.text("SHIPMENT DETAILS", margin, cursorY);
-  cursorY += 10;
+  doc.setFontSize(9);
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.text("SHIPMENT SPECIFICATIONS", margin + 5, cursorY + 7);
 
-  const allDetails: Record<string, [string, string]> = {
-    origin: ["Origin:", request.origin],
-    destination: ["Destination:", request.destination],
-    cargoType: ["Cargo Type:", request.cargoType],
-    weight: ["Weight:", `${request.weight} ${request.weightUnit || 'kg'}`],
-    dimensions: ["Dimensions:", request.dimensions || "N/A"],
-    preferredDate: ["Preferred Date:", new Date(request.preferredDate).toLocaleDateString()],
+  cursorY += 10;
+  const specOrder = request.quotedDetailsOrder || ["origin", "destination", "cargoType", "weight", "dimensions", "preferredDate"];
+  const labels: Record<string, string> = {
+    origin: "Origin Port",
+    destination: "Destination Hub",
+    cargoType: "Cargo Type",
+    weight: "Net Weight",
+    dimensions: "Volume/Dimensions",
+    preferredDate: "Est. Ship Date"
   };
 
-  const order = request.quotedDetailsOrder || ["origin", "destination", "cargoType", "weight", "dimensions", "preferredDate"];
-  const details = order.map(key => allDetails[key]).filter(Boolean);
+  specOrder.forEach((key, index) => {
+    let value = "";
+    if (key === 'weight') value = `${request.weight} ${request.weightUnit || 'kg'}`;
+    else if (key === 'preferredDate') value = new Date(request.preferredDate).toLocaleDateString();
+    else value = (request as any)[key] || "N/A";
 
-  doc.setFontSize(10);
-  details.forEach(([label, value]) => {
+    if (index % 2 === 0) {
+      doc.setFillColor(255, 255, 255);
+    } else {
+      doc.setFillColor(248, 250, 252);
+    }
+    doc.rect(margin, cursorY, pageWidth - (margin * 2), 8, 'F');
+    
     doc.setFont("helvetica", "bold");
-    doc.text(label, margin, cursorY);
+    doc.text(labels[key] || key.toUpperCase(), margin + 5, cursorY + 5.5);
     doc.setFont("helvetica", "normal");
-    doc.text(value, margin + 45, cursorY);
-    cursorY += 7;
+    doc.text(value, margin + 60, cursorY + 5.5);
+    
+    cursorY += 8;
   });
 
-  cursorY += 10;
-
-  // Totals Area
-  cursorY = Math.max(cursorY, pageHeight - 110);
-  doc.setDrawColor(200, 200, 200);
-  doc.line(margin, cursorY, pageWidth - margin, cursorY);
   cursorY += 15;
 
-  // Pricing Breakdown (Now shown for both client and partner for full transparency)
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  doc.setFont("helvetica", "normal");
+  // 4. Financial Summary
+  const totalsBoxWidth = 80;
+  const totalsBoxX = pageWidth - margin - totalsBoxWidth;
   
-  doc.text("BASE SERVICE PRICE:", margin, cursorY);
-  doc.text(`${request.quotedBasePrice?.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY, { align: "right" });
+  doc.setDrawColor(BORDER_LIGHT[0], BORDER_LIGHT[1], BORDER_LIGHT[2]);
+  doc.line(totalsBoxX, cursorY, pageWidth - margin, cursorY);
   cursorY += 8;
 
-  doc.text(`LOGISTICS SERVICE FEE (${request.brokerFeePercent || 10}%):`, margin, cursorY);
-  doc.text(`${request.brokerFee?.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY, { align: "right" });
-  cursorY += 5;
+  // Included Fee Calculation
+  const feePercent = request.brokerFeePercent || 10;
+  const total = request.quotedPrice || 0;
+  const fee = request.brokerFee || 0;
+  const base = total - fee;
+
+  doc.setFontSize(9);
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.text("Carrier Operational Rate:", totalsBoxX, cursorY);
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.text(`${base.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY, { align: "right" });
   
-  doc.setDrawColor(240, 240, 240);
-  doc.line(margin + 100, cursorY, pageWidth - margin, cursorY);
+  cursorY += 7;
+
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.text(`Platform Surcharge (${feePercent}%):`, totalsBoxX, cursorY);
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.text(`${fee.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY, { align: "right" });
+
   cursorY += 10;
 
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text(isPartnerView ? "TOTAL SETTLEMENT VALUE" : "TOTAL INVOICE AMOUNT", margin, cursorY);
-  doc.setTextColor(132, 204, 22);
-  doc.text(`${request.quotedPrice?.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY, { align: "right" });
-
-  cursorY += 15;
-
-  // Terms and Conditions
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.text("TERMS & CONDITIONS:", margin, cursorY);
-  cursorY += 4;
-  doc.setFont("helvetica", "normal");
+  // Grand Total Box
+  doc.setFillColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2], 0.1);
+  doc.rect(totalsBoxX - 5, cursorY - 6, totalsBoxWidth + 5, 14, 'F');
   
-  const baseTerms = isPartnerView 
-    ? "Settlement will be processed upon proof of delivery. Commission is non-refundable." 
-    : "Quote valid for 7 days. Final price subject to verification of cargo weight and volume at origin.";
-  const customTerms = request.quotedTerms ? `\n${request.quotedTerms}` : "";
-  const fullTerms = baseTerms + customTerms;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.text(isPartnerView ? "Settlement Total:" : "Invoice Grand Total:", totalsBoxX, cursorY + 3);
   
-  const splitTerms = doc.splitTextToSize(fullTerms, pageWidth - (margin * 2));
-  doc.text(splitTerms, margin, cursorY);
+  doc.setFontSize(14);
+  doc.setTextColor(BRAND_LIME[0], BRAND_LIME[1], BRAND_LIME[2]);
+  doc.text(`${total.toLocaleString()} ${request.quotedCurrency}`, pageWidth - margin, cursorY + 3, { align: "right" });
 
-  // Platform Branding Footer
-  if (request.quotedLogo === 'Cargo Brokers') {
-    doc.setFillColor(241, 245, 249);
-    doc.rect(0, pageHeight - 15, pageWidth, 15, 'F');
+  if (request.quotedNotes) {
+    cursorY += 20;
     doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
     doc.setFont("helvetica", "bold");
-    doc.text("CARGO BROKERS LOGISTICS NETWORK | SECURE FINANCIAL CLEARING", margin, pageHeight - 6);
+    doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+    doc.text("QUOTATION NOTES", margin, cursorY);
+    cursorY += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+    const splitNotes = doc.splitTextToSize(request.quotedNotes, pageWidth - (margin * 2));
+    doc.text(splitNotes, margin, cursorY);
+    cursorY += (splitNotes.length * 4);
   }
 
-  doc.save(`${isPartnerView ? 'PartnerSettlement' : 'CargoInvoice'}_${request.id}.pdf`);
+  // 5. Verification Seal & Footer
+  const sealY = pageHeight - 65;
+  doc.setDrawColor(BORDER_LIGHT[0], BORDER_LIGHT[1], BORDER_LIGHT[2]);
+  doc.line(margin, sealY, pageWidth - margin, sealY);
+
+  // "Verified Carrier" Badge
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(margin, sealY + 10, 50, 20, 3, 3, 'F');
+  doc.setFontSize(7);
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  doc.setFont("helvetica", "bold");
+  doc.text("VERIFIED BY", margin + 25, sealY + 17, { align: "center" });
+  doc.setFontSize(10);
+  doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+  doc.text("CARGO BROKER", margin + 25, sealY + 24, { align: "center" });
+
+  // Payment Method
+  if (request.paymentMethod) {
+    doc.setFontSize(8);
+    doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+    doc.setFont("helvetica", "bold");
+    doc.text("SETTLEMENT VIA", margin + 65, sealY + 15);
+    doc.setTextColor(TEXT_DARK[0], TEXT_DARK[1], TEXT_DARK[2]);
+    doc.setFont("helvetica", "normal");
+    doc.text(request.paymentMethod.toUpperCase(), margin + 65, sealY + 22);
+  }
+
+  // Footer Disclaimers / Custom Terms
+  doc.setFontSize(7);
+  doc.setTextColor(TEXT_MUTED[0], TEXT_MUTED[1], TEXT_MUTED[2]);
+  const disclaimer = request.quotedTerms || (isPartnerView 
+    ? "This settlement is pending final cargo reception and weight verification. Standard commission rates apply as per the CargoBroker Partner Agreement."
+    : "This quote is valid for 7 business days from date of issue. Prices are inclusive of all platform fees but may exclude local customs duties unless specified.");
+  
+  const splitDisclaimer = doc.splitTextToSize(disclaimer, 100);
+  doc.text(splitDisclaimer, pageWidth - margin, sealY + 15, { align: "right" });
+
+  // Bottom Metadata
+  doc.setFontSize(6);
+  doc.text("Document generated via CargoBroker Enterprise Node. Digital signature hash: " + btoa(request.id).substring(0, 16), margin, pageHeight - 10);
+
+  doc.save(`${isPartnerView ? 'Settlement' : 'Invoice'}_${request.id.split('-').pop()}.pdf`);
 };

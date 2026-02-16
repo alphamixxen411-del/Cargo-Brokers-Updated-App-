@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LogisticsPartner, CargoQuoteRequest, RequestStatus, AvailabilityStatus, Testimonial } from '../types';
 import { geocodeLocation } from '../services/geminiService';
@@ -51,7 +50,7 @@ const CoverageMap: React.FC<{ areas: string[], hub: string }> = ({ areas, hub })
       if (!isMounted || results.length === 0) { setLoading(false); return; }
       try {
         if (mapRef.current) mapRef.current.remove();
-        if (!mapContainerRef.current) return; // double check
+        if (!mapContainerRef.current) return;
 
         const map = L.map(mapContainerRef.current, { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -75,33 +74,52 @@ const CoverageMap: React.FC<{ areas: string[], hub: string }> = ({ areas, hub })
   }, [areas, hub]);
 
   return (
-    <div className="relative w-full h-48 sm:h-64 bg-slate-50 dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner">
+    <div className="relative w-full h-48 sm:h-64 bg-slate-50 dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner transition-colors">
       {loading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.05] dark:opacity-[0.1]">
-             <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                <pattern id="coverage-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                   <circle cx="2" cy="2" r="1" fill="currentColor" />
-                   <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                </pattern>
-                <rect width="100%" height="100%" fill="url(#coverage-grid)" />
-             </svg>
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 overflow-hidden">
+          {/* Tactical Map Grid */}
+          <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.12]">
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <pattern id="tactical-grid-coverage" width="30" height="30" patternUnits="userSpaceOnUse">
+                <path d="M 30 0 L 0 0 0 30" fill="none" stroke="currentColor" strokeWidth="0.5" />
+                <circle cx="15" cy="15" r="0.5" fill="currentColor" />
+              </pattern>
+              <rect width="100%" height="100%" fill="url(#tactical-grid-coverage)" />
+            </svg>
           </div>
-          <div className="relative flex items-center justify-center">
-             <div className="absolute w-32 h-32 bg-blue-500/5 rounded-full animate-ping duration-[3000ms]"></div>
-             <div className="absolute w-24 h-24 bg-blue-500/10 rounded-full animate-pulse"></div>
-             <div className="relative flex flex-col items-center">
-               <svg className="w-12 h-12 text-blue-600 dark:text-blue-400 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-               </svg>
-               <div className="mt-4 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] animate-pulse">
-                 Synthesizing Route Data
-               </div>
-             </div>
+          
+          <div className="relative flex flex-col items-center">
+            {/* Concentric Pulsing Rings */}
+            <div className="absolute w-48 h-48 border border-blue-500/10 rounded-full animate-ping duration-[4000ms]"></div>
+            <div className="absolute w-36 h-36 border border-blue-400/10 rounded-full animate-ping duration-[3000ms]"></div>
+            <div className="absolute w-24 h-24 bg-blue-500/5 rounded-full animate-pulse duration-[2000ms]"></div>
+            
+            <div className="relative flex flex-col items-center">
+              <div className="p-4 bg-white dark:bg-slate-900 rounded-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-bounce duration-[2000ms]">
+                <svg className="w-8 h-8 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              
+              <div className="mt-6 flex flex-col items-center">
+                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] animate-pulse">
+                  Compiling Coverage
+                </p>
+                <div className="mt-2 w-32 h-0.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500/40 animate-[loading_2s_infinite]"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
       <div ref={mapContainerRef} className="w-full h-full" />
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}} />
     </div>
   );
 };

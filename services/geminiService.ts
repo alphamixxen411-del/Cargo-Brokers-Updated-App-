@@ -86,6 +86,21 @@ export const getCurrencyInfoForLocation = async (location: string): Promise<{ co
   }
 };
 
+export const getCurrencyFromCoords = async (lat: number, lng: number): Promise<{ code: string, symbol: string } | null> => {
+  try {
+    return await executeWithRetry(async () => {
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Given coordinates ${lat}, ${lng}, what is the likely official currency code and symbol? JSON ONLY: {"code": "USD", "symbol": "$"}.`,
+        config: { responseMimeType: "application/json" },
+      });
+      return JSON.parse(response.text.trim());
+    });
+  } catch (error) {
+    return { code: 'USD', symbol: '$' };
+  }
+};
+
 export const analyzeCargoRequest = async (origin: string, destination: string, cargoType: string, weight: number) => {
   try {
     return await executeWithRetry(async () => {

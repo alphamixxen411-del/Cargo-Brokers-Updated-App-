@@ -1,10 +1,8 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { LogisticsPartner, CargoQuoteRequest, RequestStatus, AvailabilityStatus, Testimonial, PaymentMethod } from '../types';
+import { LogisticsPartner, CargoQuoteRequest, RequestStatus, Testimonial, PaymentMethod, AvailabilityStatus } from '../types';
 import { CARGO_TYPES } from '../constants';
-import { analyzeCargoRequest, getCurrencyInfoForLocation, preFlightRouteCheck } from '../services/geminiService';
+import { analyzeCargoRequest, getCurrencyInfoForLocation, preFlightRouteCheck, getCurrencyFromCoords } from '../services/geminiService';
 import RequestCard from './RequestCard';
-import PartnerProfileModal from './PartnerProfileModal';
 import CargoIcon from './CargoIcon';
 
 interface ClientViewProps {
@@ -16,6 +14,7 @@ interface ClientViewProps {
   onUpdateStatus: (id: string, status: RequestStatus, ...args: any[]) => void;
   onAddFeedback: (partnerId: string, testimonial: Testimonial, requestId: string) => void;
   paymentMethods: PaymentMethod[];
+  userLocation: { lat: number, lng: number } | null;
 }
 
 type Step = 'contact' | 'route' | 'cargo' | 'partner' | 'review';
@@ -25,25 +24,62 @@ const ClientView: React.FC<ClientViewProps> = ({
   requests, 
   onSubmit, 
   blockedPartnerIds, 
-  onToggleBlockPartner,
   onUpdateStatus,
   onAddFeedback,
-  paymentMethods
+  paymentMethods,
+  userLocation
 }) => {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
   const [currentStep, setCurrentStep] = useState<Step>('contact');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [localCurrency, setLocalCurrency] = useState<{code: string, symbol: string}>({ code: 'USD', symbol: '$' });
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [clientDetectedCurrency, setClientDetectedCurrency] = useState<string>('USD');
   const [preFlightData, setPreFlightData] = useState<{ difficulty: number, estimatedDays: string, warning: string } | null>(null);
   const [isPreFlightLoading, setIsPreFlightLoading] = useState(false);
+
+  // Filtering States
+  const [partnerSearch, setPartnerSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | AvailabilityStatus>('ALL');
+  const [minRating, setMinRating] = useState(0);
+
+  // Detect client's local currency based on coordinates
+  useEffect(() => {
+    if (userLocation) {
+      const detectCurrency = async () => {
+        const info = await getCurrencyFromCoords(userLocation.lat, userLocation.lng);
+        if (info) {
+          setClientDetectedCurrency(info.code);
+        }
+      };
+      detectCurrency();
+    }
+  }, [userLocation]);
+
+  const filteredPartners = useMemo(() => {
+    return partners.filter(p => {
+      const isNotBlocked = !blockedPartnerIds.includes(p.id);
+      const matchesSearch = p.name.toLowerCase().includes(partnerSearch.toLowerCase()) || 
+                          p.specialization.toLowerCase().includes(partnerSearch.toLowerCase());
+      const matchesStatus = statusFilter === 'ALL' || p.availability === statusFilter;
+      const matchesRating = p.rating >= minRating;
+      
+      return isNotBlocked && matchesSearch && matchesStatus && matchesRating;
+    });
+  }, [partners, blockedPartnerIds, partnerSearch, statusFilter, minRating]);
 
   const [formData, setFormData] = useState({
     clientName: '', clientEmail: '', clientPhone: '',
     origin: '', destination: '', cargoType: CARGO_TYPES[0],
-    weight: 0, dimensions: '', preferredDate: tomorrow,
-    partnerId: partners.find(p => !blockedPartnerIds.includes(p.id))?.id || partners[0].id
+    weight: 0, weightUnit: 'kg' as 'kg' | 't', dimensions: '', preferredDate: tomorrow,
+    partnerId: ''
   });
+
+  // Set initial partner if none selected and filtered list changes
+  useEffect(() => {
+    if (!formData.partnerId && filteredPartners.length > 0) {
+      setFormData(prev => ({ ...prev, partnerId: filteredPartners[0].id }));
+    }
+  }, [filteredPartners, formData.partnerId]);
 
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
@@ -69,15 +105,14 @@ const ClientView: React.FC<ClientViewProps> = ({
   }, [formData.origin, formData.destination, currentStep]);
 
   const steps: { id: Step; label: string; icon: string }[] = [
-    { id: 'contact', label: 'Contact', icon: '👤' },
-    { id: 'route', label: 'Route', icon: '📍' },
-    { id: 'cargo', label: 'Cargo', icon: '📦' },
-    { id: 'partner', label: 'Partner', icon: '🚛' },
+    { id: 'contact', label: 'Identity', icon: '👤' },
+    { id: 'route', label: 'Logistics', icon: '📍' },
+    { id: 'cargo', label: 'Payload', icon: '📦' },
+    { id: 'partner', label: 'Carrier', icon: '🚛' },
     { id: 'review', label: 'Review', icon: '✅' }
   ];
 
   const currentStepIndex = steps.findIndex(s => s.id === currentStep);
-  const activePartners = useMemo(() => partners.filter(p => !blockedPartnerIds.includes(p.id)), [partners, blockedPartnerIds]);
 
   const validateStep = (step: Step): boolean => {
     const newErrors: Partial<Record<string, string>> = {};
@@ -89,6 +124,8 @@ const ClientView: React.FC<ClientViewProps> = ({
       if (!formData.destination.trim()) newErrors.destination = "Required";
     } else if (step === 'cargo') {
       if (formData.weight <= 0) newErrors.weight = "Required";
+    } else if (step === 'partner') {
+      if (!formData.partnerId) newErrors.partnerId = "Please select a carrier";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -108,40 +145,49 @@ const ClientView: React.FC<ClientViewProps> = ({
     setIsAiProcessing(true);
     try {
       const aiInsight = await analyzeCargoRequest(formData.origin, formData.destination, formData.cargoType, formData.weight);
-      const isTonnes = formData.weight >= 1000;
-      const submittedWeight = isTonnes ? formData.weight / 1000 : formData.weight;
-      const submittedUnit: 'kg' | 't' = isTonnes ? 't' : 'kg';
 
       const newRequest: CargoQuoteRequest = {
         ...formData,
-        weight: submittedWeight, weightUnit: submittedUnit,
         id: `req-${Math.random().toString(36).substr(2, 9)}`,
         clientId: 'client-001', 
         clientName: formData.clientName,
         clientEmail: formData.clientEmail,
         clientPhone: formData.clientPhone,
         status: RequestStatus.PENDING,
-        aiNotes: aiInsight, createdAt: new Date().toISOString()
+        aiNotes: aiInsight, 
+        suggestedCurrency: clientDetectedCurrency, // Pass the detected local currency
+        createdAt: new Date().toISOString()
       };
       
       onSubmit(newRequest);
-      setIsSubmitted(true);
-      setTimeout(() => setIsSubmitted(false), 2000);
       setCurrentStep('contact');
-      setFormData({ ...formData, clientName: '', clientEmail: '', clientPhone: '', origin: '', destination: '', weight: 0, dimensions: '', preferredDate: tomorrow, cargoType: CARGO_TYPES[0], partnerId: activePartners[0]?.id || partners[0].id });
+      setFormData({ 
+        ...formData, 
+        clientName: '', 
+        clientEmail: '', 
+        clientPhone: '', 
+        origin: '', 
+        destination: '', 
+        weight: 0, 
+        weightUnit: 'kg',
+        dimensions: '', 
+        preferredDate: tomorrow, 
+        cargoType: CARGO_TYPES[0], 
+        partnerId: '' 
+      });
       setPreFlightData(null);
     } finally {
       setIsAiProcessing(false);
     }
   };
 
-  const inputClasses = (field: string) => `w-full rounded-2xl border px-4 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
+  const inputClasses = (field: string) => `w-full rounded-2xl border px-5 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
     errors[field] 
     ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10 text-rose-900 dark:text-rose-100 placeholder:text-rose-300' 
-    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
   }`;
 
-  const Label = ({ htmlFor, children, error }: { htmlFor: string, children: string, error?: string }) => (
+  const Label = ({ htmlFor, children, error }: { htmlFor: string, children?: React.ReactNode, error?: string }) => (
     <div className="flex justify-between items-center mb-1.5 px-1">
       <label htmlFor={htmlFor} className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{children}</label>
       {error && <span className="text-[10px] font-black text-rose-500 uppercase tracking-tighter">{error}</span>}
@@ -149,12 +195,17 @@ const ClientView: React.FC<ClientViewProps> = ({
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start max-w-[1400px] mx-auto">
-      <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-2xl relative overflow-hidden transition-all">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start max-w-[1400px] mx-auto px-2">
+      <div className="lg:col-span-5 xl:col-span-4 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-[600px]">
+        <div className="mb-10">
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mb-1">New Quote</h2>
+          <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Logistics Request Form</p>
+        </div>
+
         {isAiProcessing && (
           <div className="absolute inset-0 z-50 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-300">
             <div className="w-12 h-12 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-800 dark:text-white">Analyzing Route...</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-800 dark:text-white">Analyzing Logistics Flow...</h3>
           </div>
         )}
 
@@ -162,47 +213,40 @@ const ClientView: React.FC<ClientViewProps> = ({
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
           <div className="absolute top-1/2 left-0 h-0.5 bg-blue-500 -translate-y-1/2 z-0 transition-all duration-500" style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}></div>
           {steps.map((s, i) => (
-            <div key={s.id} className={`relative z-10 w-10 h-10 rounded-2xl flex items-center justify-center text-xs font-black border-2 transition-all duration-500 ${i <= currentStepIndex ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-300'}`}>
+            <div key={s.id} className={`relative z-10 w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black border-2 transition-all duration-500 ${i <= currentStepIndex ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-300'}`}>
               {i < currentStepIndex ? '✓' : s.icon}
             </div>
           ))}
         </div>
 
-        <div className="min-h-[340px] flex flex-col justify-center">
+        <div className="flex-grow flex flex-col justify-center">
           <div key={currentStep} className="animate-in fade-in slide-in-from-right-8 duration-500 flex flex-col">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">{steps[currentStepIndex].label}</h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-8">Phase {currentStepIndex + 1}</p>
-
-            <div className="space-y-4">
+            <div className="space-y-5">
               {currentStep === 'contact' && (
                 <>
                   <div>
-                    <Label htmlFor="clientName" error={errors.clientName}>Full Name</Label>
-                    <input id="clientName" type="text" placeholder="e.g. John Doe" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={inputClasses('clientName')} />
+                    <Label htmlFor="clientName" error={errors.clientName}>Client Identity</Label>
+                    <input id="clientName" type="text" placeholder="Full name or Company" value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className={inputClasses('clientName')} />
                   </div>
                   <div>
-                    <Label htmlFor="clientEmail" error={errors.clientEmail}>Email Address</Label>
-                    <input id="clientEmail" type="email" placeholder="e.g. john@example.com" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientPhone">Phone Number</Label>
-                    <input id="clientPhone" type="tel" placeholder="e.g. +1 555 0000" value={formData.clientPhone} onChange={e => setFormData({...formData, clientPhone: e.target.value})} className={inputClasses('clientPhone')} />
+                    <Label htmlFor="clientEmail" error={errors.clientEmail}>Primary Email</Label>
+                    <input id="clientEmail" type="email" placeholder="e.g. contact@hub.com" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
                   </div>
                 </>
               )}
               {currentStep === 'route' && (
                 <>
                   <div>
-                    <Label htmlFor="origin" error={errors.origin}>Origin Location</Label>
-                    <input id="origin" type="text" placeholder="e.g. Mombasa, Kenya" value={formData.origin} onChange={e => setFormData({...formData, origin: e.target.value})} className={inputClasses('origin')} />
+                    <Label htmlFor="origin" error={errors.origin}>Origin Port/City</Label>
+                    <input id="origin" type="text" placeholder="e.g. Rotterdam, NL" value={formData.origin} onChange={e => setFormData({...formData, origin: e.target.value})} className={inputClasses('origin')} />
                   </div>
                   <div>
-                    <Label htmlFor="destination" error={errors.destination}>Final Destination</Label>
-                    <input id="destination" type="text" placeholder="e.g. Kampala, Uganda" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} className={inputClasses('destination')} />
+                    <Label htmlFor="destination" error={errors.destination}>Destination Hub</Label>
+                    <input id="destination" type="text" placeholder="e.g. Chicago, US" value={formData.destination} onChange={e => setFormData({...formData, destination: e.target.value})} className={inputClasses('destination')} />
                   </div>
                   {(isPreFlightLoading || preFlightData) && (
                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/20">
-                      {isPreFlightLoading ? <p className="text-[9px] font-black animate-pulse uppercase tracking-widest text-indigo-400">Checking Route...</p> : <p className="text-[9px] font-bold text-indigo-800 dark:text-indigo-300 italic">{preFlightData?.warning}</p>}
+                      {isPreFlightLoading ? <p className="text-[9px] font-black animate-pulse uppercase tracking-widest text-indigo-400">Consulting AI Oracle...</p> : <p className="text-[9px] font-bold text-indigo-800 dark:text-indigo-300 italic">{preFlightData?.warning}</p>}
                     </div>
                   )}
                 </>
@@ -215,41 +259,167 @@ const ClientView: React.FC<ClientViewProps> = ({
                       {CARGO_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="weight" error={errors.weight}>Weight</Label>
+                      <div className="flex gap-2">
+                        <input 
+                          id="weight" 
+                          type="number" 
+                          placeholder="0" 
+                          value={formData.weight || ''} 
+                          onChange={e => setFormData({...formData, weight: Number(e.target.value)})} 
+                          className={`${inputClasses('weight')} flex-1`} 
+                        />
+                        <select 
+                          value={formData.weightUnit} 
+                          onChange={e => setFormData({...formData, weightUnit: e.target.value as 'kg' | 't'})}
+                          className="bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-3 text-[10px] font-black text-blue-600 uppercase outline-none focus:border-blue-500"
+                        >
+                          <option value="kg">KG</option>
+                          <option value="t">T</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="date">Ship Date</Label>
+                      <input id="date" type="date" value={formData.preferredDate} onChange={e => setFormData({...formData, preferredDate: e.target.value})} className={inputClasses('date')} />
+                    </div>
+                  </div>
                   <div>
-                    <Label htmlFor="weight" error={errors.weight}>Total Weight (KG)</Label>
-                    <input id="weight" type="number" placeholder="0" value={formData.weight || ''} onChange={e => setFormData({...formData, weight: Number(e.target.value)})} className={inputClasses('weight')} />
+                    <Label htmlFor="dimensions">Dimensions (Optional)</Label>
+                    <input 
+                      id="dimensions" 
+                      type="text" 
+                      placeholder="e.g. 120x80x100 cm" 
+                      value={formData.dimensions} 
+                      onChange={e => setFormData({...formData, dimensions: e.target.value})} 
+                      className={inputClasses('dimensions')} 
+                    />
                   </div>
                 </>
               )}
               {currentStep === 'partner' && (
-                <div className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                  <Label htmlFor="partnerSelect">Select Preferred Carrier</Label>
-                  {activePartners.map(p => (
-                    <button key={p.id} onClick={() => setFormData({...formData, partnerId: p.id})} className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center gap-3 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-4 ring-blue-500/10' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700'}`}>
-                      <div className={`w-3 h-3 rounded-full border-2 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-600' : 'border-slate-300 dark:border-slate-600'}`}></div>
-                      <div>
-                        <p className="text-xs font-black text-slate-900 dark:text-white">{p.name}</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">{p.specialization}</p>
+                <div className="flex flex-col h-[400px]">
+                  <Label htmlFor="partnerSelect" error={errors.partnerId}>Carrier Selection Network</Label>
+                  
+                  {/* Partner Filters UI */}
+                  <div className="mb-4 space-y-3">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Search by name or specialty..." 
+                        value={partnerSearch} 
+                        onChange={e => setPartnerSearch(e.target.value)} 
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-10 py-2.5 text-[11px] font-bold outline-none focus:border-blue-500 transition-all" 
+                      />
+                      <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="2.5"/></svg>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1">
+                      {(['ALL', 'AVAILABLE', 'LIMITED', 'UNAVAILABLE'] as const).map(status => (
+                        <button
+                          key={status}
+                          onClick={() => setStatusFilter(status)}
+                          className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${
+                            statusFilter === status 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' 
+                            : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-100 dark:border-slate-800 hover:border-slate-200'
+                          }`}
+                        >
+                          {status.replace('_', ' ')}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">Rating:</span>
+                      {[0, 3, 4, 4.5].map(rating => (
+                        <button
+                          key={rating}
+                          onClick={() => setMinRating(rating)}
+                          className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${
+                            minRating === rating 
+                            ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/10 ring-1 ring-amber-200' 
+                            : 'text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          {rating === 0 ? 'Any' : `${rating}+ ★`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1 flex-1">
+                    {filteredPartners.length > 0 ? (
+                      filteredPartners.map(p => (
+                        <button 
+                          key={p.id} 
+                          onClick={() => {
+                            setFormData({...formData, partnerId: p.id});
+                            if ('vibrate' in navigator) navigator.vibrate(5);
+                          }} 
+                          className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center gap-4 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-4 ring-blue-500/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'}`}
+                        >
+                          <div className="relative">
+                            <img src={p.logo} alt="" className="w-10 h-10 rounded-xl bg-slate-100 shadow-sm" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <div className="flex items-center gap-2 truncate">
+                                <p className="text-xs font-black text-slate-900 dark:text-white truncate">{p.name}</p>
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${
+                                  p.availability === 'AVAILABLE' ? 'bg-emerald-500' : p.availability === 'LIMITED' ? 'bg-amber-500' : 'bg-rose-500'
+                                }`}></div>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                <span className="text-[10px] font-black text-amber-500">★ {p.rating}</span>
+                              </div>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter truncate">{p.specialization}</p>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border-4 flex-shrink-0 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200 dark:border-slate-700'}`}></div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-10 opacity-50 grayscale">
+                        <svg className="w-10 h-10 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No Carrier Matches</p>
                       </div>
-                    </button>
-                  ))}
+                    )}
+                  </div>
                 </div>
               )}
               {currentStep === 'review' && (
-                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-4">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Route Hubs</p>
+                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white"><CargoIcon type={formData.cargoType} className="w-5 h-5" /></div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selected Payload</p>
+                      <p className="text-xs font-black text-slate-900 dark:text-white uppercase">{formData.cargoType}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Routing Hubs</p>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">{formData.origin} &rarr; {formData.destination}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Payload</p>
-                      <p className="text-[10px] text-slate-900 dark:text-white font-black uppercase">{formData.cargoType}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Mass</p>
+                      <p className="text-xs font-black text-slate-900 dark:text-white">{formData.weight}{formData.weightUnit}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Weight</p>
-                      <p className="text-[10px] text-slate-900 dark:text-white font-black uppercase">{formData.weight}kg</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ETD</p>
+                      <p className="text-xs font-black text-slate-900 dark:text-white">{formData.preferredDate}</p>
                     </div>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned Carrier</p>
+                    <p className="text-xs font-black text-blue-600 uppercase mt-1">{partners.find(p => p.id === formData.partnerId)?.name}</p>
+                  </div>
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Preference</p>
+                    <p className="text-xs font-black text-emerald-600 uppercase mt-1">Settle in {clientDetectedCurrency}</p>
                   </div>
                 </div>
               )}
@@ -257,7 +427,7 @@ const ClientView: React.FC<ClientViewProps> = ({
           </div>
         </div>
 
-        <div className="mt-10 flex gap-4">
+        <div className="mt-10 flex gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
           {currentStepIndex > 0 && (
             <button onClick={() => setCurrentStep(steps[currentStepIndex - 1].id)} className="px-6 py-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Back</button>
           )}
@@ -265,17 +435,27 @@ const ClientView: React.FC<ClientViewProps> = ({
             onClick={currentStep === 'review' ? handleSubmit : handleNext} 
             className="flex-1 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 hover:bg-blue-700 transition-all"
           >
-            {currentStep === 'review' ? 'Finalize & Request' : 'Continue'}
+            {currentStep === 'review' ? 'Transmit Request' : 'Continue'}
           </button>
         </div>
       </div>
 
-      <div className="lg:col-span-2 space-y-6">
-        <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest">Active Pipeline</h2>
+      <div className="lg:col-span-7 xl:col-span-8 space-y-6">
+        <div className="flex items-center justify-between px-2">
+          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-widest">Global Pipeline</h2>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Flow</span>
+          </div>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {requests.length === 0 ? (
-            <div className="md:col-span-2 p-12 bg-white dark:bg-slate-900 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-center">
-              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">No Active Shipments Detected</p>
+            <div className="md:col-span-2 p-16 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800 text-center flex flex-col items-center justify-center space-y-4">
+              <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-300">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+              <p className="text-slate-400 font-black uppercase text-xs tracking-[0.2em]">Pipeline Idle: No Active Shipments</p>
             </div>
           ) : (
             requests.map(req => (
@@ -285,7 +465,8 @@ const ClientView: React.FC<ClientViewProps> = ({
                 partnerName={partners.find(p => p.id === req.partnerId)?.name || 'Carrier'} 
                 partner={partners.find(p => p.id === req.partnerId)} 
                 showClientActions={true} 
-                onUpdateStatus={onUpdateStatus} 
+                onUpdateStatus={(status, ...args) => onUpdateStatus(req.id, status, ...args)} 
+                onAddFeedback={onAddFeedback}
                 paymentMethods={paymentMethods}
               />
             ))

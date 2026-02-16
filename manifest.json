@@ -7,7 +7,7 @@
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
-  "background_color": "#ffffff",
+  "background_color": "#020617",
   "theme_color": "#84cc16",
   "orientation": "portrait",
   "dir": "ltr",
@@ -41,13 +41,6 @@
       "description": "Start a new cargo quote request",
       "url": "./?action=new_quote",
       "icons": [{ "src": "https://picsum.photos/seed/quote/96/96", "sizes": "96x96" }]
-    },
-    {
-      "name": "Track Shipments",
-      "short_name": "Tracking",
-      "description": "View live shipment status",
-      "url": "./?action=track",
-      "icons": [{ "src": "https://picsum.photos/seed/track/96/96", "sizes": "96x96" }]
     }
   ]
 }

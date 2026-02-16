@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { geocodeLocation } from '../services/geminiService';
 
@@ -44,7 +43,6 @@ const PartnerMiniMap: React.FC<PartnerMiniMapProps> = ({ location, name }) => {
       setIsLoading(true);
       setError(false);
       
-      // Geocode the location
       const coords = await geocodeLocation(location);
       
       if (!isMounted || !containerRef.current) return;
@@ -55,14 +53,13 @@ const PartnerMiniMap: React.FC<PartnerMiniMapProps> = ({ location, name }) => {
             mapRef.current.remove();
           }
 
-          // Initialize as a STATIC map (no interactions)
           const map = L.map(containerRef.current, {
             zoomControl: false,
             attributionControl: false,
-            dragging: false, // Disabled for static feel
-            scrollWheelZoom: false, // Disabled for static feel
-            doubleClickZoom: false, // Disabled for static feel
-            touchZoom: false, // Disabled for static feel
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            touchZoom: false,
             keyboard: false,
             boxZoom: false
           }).setView([coords.lat, coords.lng], 10);
@@ -110,30 +107,33 @@ const PartnerMiniMap: React.FC<PartnerMiniMapProps> = ({ location, name }) => {
   return (
     <div className="relative w-full h-full bg-slate-50 dark:bg-slate-900 transition-colors cursor-default">
       {(isLoading || !isVisible) && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 dark:bg-slate-900">
-          <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-            {/* Pulsing Grid Background */}
-            <svg className="absolute inset-0 w-full h-full opacity-10 dark:opacity-20" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.5"/>
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50 dark:bg-slate-900 overflow-hidden">
+          {/* Finer Tactical Grid */}
+          <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.08]">
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <pattern id="mini-map-grid-finer" width="15" height="15" patternUnits="userSpaceOnUse">
+                <path d="M 15 0 L 0 0 0 15" fill="none" stroke="currentColor" strokeWidth="0.5"/>
+              </pattern>
+              <rect width="100%" height="100%" fill="url(#mini-map-grid-finer)" />
             </svg>
+          </div>
+          
+          <div className="relative flex flex-col items-center">
+            {/* Orbital Sonar Pulse */}
+            <div className="absolute w-32 h-32 border-2 border-blue-500/10 rounded-full animate-ping duration-[3000ms]"></div>
+            <div className="absolute w-20 h-20 border border-blue-400/20 rounded-full animate-pulse"></div>
             
-            {/* Stylized Radar/Scanning Effect */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-500/20 rounded-full animate-ping duration-[2000ms]"></div>
-              <div className="absolute inset-0 bg-blue-500/10 rounded-full animate-pulse duration-[1500ms] scale-150"></div>
-              <svg className="w-8 h-8 text-blue-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            
-            <div className="absolute bottom-4 text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] animate-pulse">
-              {!isVisible ? 'Waiting for View...' : 'Locking GPS...'}
+            <div className="relative flex flex-col items-center">
+              <div className="w-10 h-10 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+              </div>
+              <div className="mt-4 flex flex-col items-center">
+                <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] animate-pulse">
+                  {!isVisible ? 'Standby' : 'Syncing Hub'}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -154,11 +154,11 @@ const PartnerMiniMap: React.FC<PartnerMiniMapProps> = ({ location, name }) => {
         </div>
       )}
 
-      <div ref={containerRef} className={`w-full h-full grayscale-[0.2] contrast-[1.1] ${error || !isVisible ? 'opacity-0' : 'opacity-100'}`} />
+      <div ref={containerRef} className={`w-full h-full grayscale-[0.2] contrast-[1.1] transition-opacity duration-700 ${error || !isVisible || isLoading ? 'opacity-0' : 'opacity-100'}`} />
       
-      <div className="absolute bottom-1 right-1 z-10">
-        <span className="text-[8px] font-black text-white bg-slate-900/40 backdrop-blur-sm px-1.5 py-0.5 rounded uppercase tracking-tighter">
-          {error ? 'Hub Location Locked' : `Live Hub: ${location}`}
+      <div className="absolute bottom-1.5 right-1.5 z-10">
+        <span className="text-[8px] font-black text-white bg-slate-900/50 backdrop-blur-md px-2 py-1 rounded-lg uppercase tracking-tighter border border-white/10">
+          {error ? 'Hub Locked' : `Hub: ${location}`}
         </span>
       </div>
     </div>

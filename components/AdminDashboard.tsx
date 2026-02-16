@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { CargoQuoteRequest, LogisticsPartner, RequestStatus, AvailabilityStatus, PaymentMethod } from '../types';
 import { CARGO_TYPES } from '../constants';
@@ -11,46 +10,11 @@ interface AdminDashboardProps {
   onUpdatePartner?: (partnerId: string, updates: Partial<LogisticsPartner>) => void;
   paymentMethods: PaymentMethod[];
   setPaymentMethods: React.Dispatch<React.SetStateAction<PaymentMethod[]>>;
+  defaultBrokerageFee: number;
+  setDefaultBrokerageFee: (fee: number) => void;
+  blockedPartnerIds: string[];
+  onToggleBlockPartner: (id: string) => void;
 }
-
-const generateTrendData = (seed: string, length: number, base: number, volatility: number) => {
-  const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return Array.from({ length }, (_, i) => {
-    const variance = (Math.sin(hash + i) * volatility);
-    return Math.max(0, Math.round(base + variance));
-  });
-};
-
-const SimpleLineChart: React.FC<{ data: number[]; color: string }> = ({ data, color }) => {
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const width = 100;
-  const height = 40;
-  
-  const points = data.map((val, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((val - min) / range) * height;
-    return `${x},${y}`;
-  }).join(' ');
-
-  const areaPoints = `${points} ${width},${height} 0,${height}`;
-
-  return (
-    <div className="h-12 w-full">
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="overflow-visible">
-        <defs>
-          <linearGradient id={`grad-${color.replace('#','')}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style={{ stopColor: color, stopOpacity: 0.3 }} />
-            <stop offset="100%" style={{ stopColor: color, stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-        <path d={`M ${areaPoints.split(' ')[0]} L ${areaPoints}`} fill={`url(#grad-${color.replace('#','')})`} className="animate-in fade-in duration-1000" />
-        <polyline fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={points} className="transition-all duration-700 ease-in-out" />
-      </svg>
-    </div>
-  );
-};
 
 const RatingHistogram: React.FC<{ partner: LogisticsPartner }> = ({ partner }) => {
   const distribution = useMemo(() => {
@@ -78,149 +42,302 @@ const RatingHistogram: React.FC<{ partner: LogisticsPartner }> = ({ partner }) =
   );
 };
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ requests, partners, onBulkUpdate, onUpdatePartner, paymentMethods, setPaymentMethods }) => {
-  const [activeTab, setActiveTab] = useState<'shipments' | 'partners' | 'analytics' | 'settings'>('shipments');
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
+  requests, 
+  partners, 
+  onBulkUpdate, 
+  onUpdatePartner, 
+  paymentMethods, 
+  setPaymentMethods,
+  defaultBrokerageFee,
+  setDefaultBrokerageFee,
+  blockedPartnerIds,
+  onToggleBlockPartner
+}) => {
+  const [activeTab, setActiveTab] = useState<'shipments' | 'partners' | 'settings'>('shipments');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterPartner, setFilterPartner] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [simValue, setSimValue] = useState(10000);
 
   const stats = useMemo(() => {
     const accepted = requests.filter(r => r.status === RequestStatus.ACCEPTED || r.status === RequestStatus.DELIVERED);
     const totalPlatformRevenue = accepted.reduce((sum, r) => sum + (r.brokerFee || 0), 0);
     const totalWeightKg = requests.reduce((sum, r) => sum + (r.weight * (r.weightUnit === 't' ? 1000 : 1)), 0);
-    return { totalRevenue: totalPlatformRevenue, totalWeight: totalWeightKg, activeTracking: accepted.length, totalRequests: requests.length };
+    return { 
+      totalRevenue: totalPlatformRevenue, 
+      totalWeight: totalWeightKg, 
+      activeTracking: accepted.length, 
+      totalRequests: requests.length 
+    };
   }, [requests]);
-
-  const platformTrends = useMemo(() => ({
-    revenue: generateTrendData('platform-revenue', 20, stats.totalRevenue / 20, 200),
-    tonnage: generateTrendData('platform-tonnage', 20, stats.totalWeight / 20, 1000),
-  }), [stats]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {
       const statusMatch = filterStatus === 'ALL' || r.status === filterStatus;
-      const partnerMatch = filterPartner === 'ALL' || r.partnerId === filterPartner;
       const searchMatch = r.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.toLowerCase().includes(searchTerm.toLowerCase());
-      return statusMatch && partnerMatch && searchMatch;
+      return statusMatch && searchMatch;
     });
-  }, [requests, filterStatus, filterPartner, searchTerm]);
+  }, [requests, filterStatus, searchTerm]);
 
   const StatCard = ({ label, value, sub, icon, color }: any) => (
-    <div className="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl transition-all hover:scale-[1.02] overflow-hidden">
-      <div className={`absolute top-0 right-0 w-32 h-32 ${color} opacity-[0.03] rounded-full -translate-y-1/2 translate-x-1/2`}></div>
-      <div className="flex items-center justify-between mb-6">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</p>
-        <div className={`p-3 rounded-2xl ${color} bg-opacity-10 text-opacity-100 shadow-sm`}>{icon}</div>
+    <div className="relative bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl transition-all hover:scale-[1.02] overflow-hidden">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+        <div className={`p-2 rounded-xl ${color} bg-opacity-10 text-opacity-100`}>{icon}</div>
       </div>
-      <p className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</p>
-      {sub && <p className="text-[10px] font-bold text-slate-500 mt-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>{sub}</p>}
+      <p className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{value}</p>
+      {sub && <p className="text-[10px] font-bold text-slate-500 mt-2">{sub}</p>}
     </div>
   );
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-1000">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Platform Net Fee" value={`$${stats.totalRevenue.toLocaleString()}`} sub={`${stats.activeTracking} In-Transit Flows`} color="bg-emerald-500 text-emerald-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2"/></svg>} />
-        <StatCard label="Global Tonnage" value={`${(stats.totalWeight / 1000).toFixed(1)} tons`} sub="Consolidated Mass" color="bg-blue-500 text-blue-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 6l3 1m0 0l-3 9"/></svg>} />
-        <StatCard label="Partner Nodes" value={partners.length} sub="Verified Hubs" color="bg-indigo-500 text-indigo-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 20h5v-2"/></svg>} />
-        <StatCard label="Neural Precision" value="98.1%" sub="Optimized Rating" color="bg-amber-500 text-amber-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>} />
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Platform Revenue" value={`$${stats.totalRevenue.toLocaleString()}`} sub={`${stats.activeTracking} active flows`} color="bg-emerald-500 text-emerald-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2"/></svg>} />
+        <StatCard label="Tonnage" value={`${(stats.totalWeight / 1000).toFixed(1)}t`} sub="Total managed mass" color="bg-blue-500 text-blue-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 6l3 1m0 0l-3 9"/></svg>} />
+        <StatCard label="Partners" value={partners.length} sub="Verified carrier nodes" color="bg-indigo-500 text-indigo-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 20h5v-2"/></svg>} />
+        <StatCard label="Requests" value={stats.totalRequests} sub="All time interactions" color="bg-amber-500 text-amber-600" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>} />
       </div>
 
-      <div className="flex bg-white dark:bg-slate-900 p-2 rounded-3xl border border-slate-200 dark:border-slate-800 gap-2 overflow-x-auto scrollbar-hide shadow-sm sticky top-20 z-40">
-        {['shipments', 'partners', 'analytics', 'settings'].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab as any)} className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{tab}</button>
+      <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto scrollbar-hide shadow-sm">
+        {['shipments', 'partners', 'settings'].map((tab) => (
+          <button 
+            key={tab} 
+            onClick={() => setActiveTab(tab as any)} 
+            className={`flex-1 min-w-[100px] py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+          >
+            {tab}
+          </button>
         ))}
       </div>
 
       {activeTab === 'shipments' && (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-             <div className="relative w-full lg:w-72">
-                <input type="text" placeholder="Search Invoices..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-12 py-3.5 text-[10px] font-black uppercase tracking-widest outline-none focus:ring-4 focus:ring-blue-500/10" />
-                <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-             </div>
-             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 lg:pb-0 w-full lg:w-auto">
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+             <input 
+               type="text" 
+               placeholder="Search by client or ID..." 
+               value={searchTerm} 
+               onChange={(e) => setSearchTerm(e.target.value)} 
+               className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+             />
+             <div className="flex gap-2">
                 {['ALL', 'PENDING', 'ACCEPTED', 'DELIVERED'].map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)} className={`px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${filterStatus === s ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-400 hover:border-blue-500'}`}>{s}</button>
+                  <button 
+                    key={s} 
+                    onClick={() => setFilterStatus(s)} 
+                    className={`px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterStatus === s ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400'}`}
+                  >
+                    {s}
+                  </button>
                 ))}
              </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-            <div className="hidden lg:block">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cargo Identity</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Route Analysis</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Financials</th>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead className="hidden sm:table-header-group">
+                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Route</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Quote</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredRequests.map(req => (
+                  <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all flex flex-col sm:table-row">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center text-slate-500"><CargoIcon type={req.cargoType} className="w-4 h-4" /></div>
+                        <div><p className="text-xs font-black">{req.clientName}</p><p className="text-[9px] font-bold text-slate-400">ID: {req.id.split('-').pop()}</p></div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs font-bold">{req.origin} &rarr; {req.destination}</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-black">{req.weight}{req.weightUnit || 'kg'} · {req.cargoType}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${req.status === RequestStatus.ACCEPTED ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{req.status}</span>
+                    </td>
+                    <td className="px-6 py-4 text-left sm:text-right">
+                      <p className="text-sm font-black text-emerald-600">${(req.quotedPrice || 0).toLocaleString()}</p>
+                      <p className="text-[8px] font-black text-slate-400 uppercase">Fee: ${(req.brokerFee || 0).toLocaleString()}</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                  {filteredRequests.map(req => (
-                    <tr key={req.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-all group">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-500 group-hover:bg-blue-600 group-hover:text-white transition-all"><CargoIcon type={req.cargoType} className="w-5 h-5" /></div>
-                           <div><p className="text-xs font-black text-slate-900 dark:text-white">{req.clientName}</p><p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">ID: {req.id.split('-').pop()}</p></div>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{req.origin} &rarr; {req.destination}</p>
-                        <p className="text-[9px] text-slate-400 uppercase font-black mt-1.5">{req.weight} {req.weightUnit || 'kg'} · {req.cargoType}</p>
-                      </td>
-                      <td className="px-8 py-6">
-                        <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${req.status === RequestStatus.ACCEPTED ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-100 text-slate-500'}`}>{req.status}</span>
-                      </td>
-                      <td className="px-8 py-6">
-                        <p className="text-sm font-black text-emerald-600">${(req.quotedPrice || 0).toLocaleString()}</p>
-                        <p className="text-[8px] font-black text-slate-400 uppercase mt-1">Platform Fee: ${(req.brokerFee || 0).toLocaleString()}</p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* Mobile Stacked Layout */}
-            <div className="lg:hidden divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredRequests.map(req => (
-                <div key={req.id} className="p-6 space-y-4">
-                   <div className="flex justify-between items-start">
-                     <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-500"><CargoIcon type={req.cargoType} className="w-5 h-5" /></div>
-                       <div><p className="text-xs font-black">{req.clientName}</p><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">ID: {req.id.split('-').pop()}</p></div>
-                     </div>
-                     <span className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-[9px] font-black uppercase tracking-widest">{req.status}</span>
-                   </div>
-                   <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl">
-                     <p className="text-xs font-bold">{req.origin} &rarr; {req.destination}</p>
-                     <p className="text-[9px] text-slate-400 uppercase font-black mt-2">{req.weight} {req.weightUnit || 'kg'} · {req.cargoType}</p>
-                   </div>
-                   <div className="flex justify-between items-center px-1">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Settle</p>
-                     <p className="text-sm font-black text-emerald-600">${(req.quotedPrice || 0).toLocaleString()}</p>
-                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
       {activeTab === 'partners' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
-          {partners.map(p => (
-            <div key={p.id} className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col group hover:shadow-2xl transition-all duration-500">
-              <div className="flex items-center gap-5 mb-10">
-                <img src={p.logo} className="w-16 h-16 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm group-hover:scale-110 transition-all" alt="" />
-                <div><h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{p.name}</h4><p className="text-[9px] text-blue-600 font-black uppercase tracking-[0.2em]">{p.specialization}</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4">
+          {partners.map(p => {
+            const isBlocked = blockedPartnerIds.includes(p.id);
+            return (
+              <div key={p.id} className={`bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col group hover:shadow-xl transition-all duration-300 ${isBlocked ? 'opacity-60 saturate-50' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <img src={p.logo} className="w-12 h-12 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm" alt="" />
+                    <div>
+                      <h4 className="text-lg font-black tracking-tight">{p.name}</h4>
+                      <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{p.specialization}</p>
+                    </div>
+                  </div>
+                  {isBlocked && (
+                    <span className="px-2 py-1 bg-rose-500 text-white text-[8px] font-black uppercase rounded-lg shadow-lg shadow-rose-500/20">Suspended</span>
+                  )}
+                </div>
+                <RatingHistogram partner={p} />
+                
+                <div className="mt-6 space-y-3">
+                   <div className="flex gap-2">
+                    {(['AVAILABLE', 'LIMITED', 'UNAVAILABLE'] as AvailabilityStatus[]).map(status => (
+                      <button
+                        key={status}
+                        disabled={isBlocked}
+                        onClick={() => onUpdatePartner?.(p.id, { availability: status })}
+                        className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
+                          p.availability === status
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-md'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-slate-200'
+                        } ${isBlocked ? 'cursor-not-allowed opacity-50' : ''}`}
+                      >
+                        {status.slice(0, 5)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button 
+                    onClick={() => onToggleBlockPartner(p.id)}
+                    className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
+                      isBlocked 
+                      ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-900/40' 
+                      : 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-900/20 dark:border-rose-900/40 hover:bg-rose-600 hover:text-white'
+                    }`}
+                  >
+                    {isBlocked ? 'Reactivate Carrier' : 'Suspend Carrier Node'}
+                  </button>
+                </div>
               </div>
-              <RatingHistogram partner={p} />
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="max-w-4xl mx-auto space-y-8 animate-in zoom-in duration-300">
+          <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+            
+            <div className="flex flex-col md:flex-row justify-between gap-8 mb-10 relative z-10">
+               <div>
+                  <h3 className="text-2xl font-black tracking-tight">System Settings</h3>
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Platform-wide Global Defaults</p>
+               </div>
+               <div className="bg-blue-600 text-white px-8 py-5 rounded-3xl shadow-xl shadow-blue-500/20 text-center min-w-[160px]">
+                  <p className="text-[9px] font-black uppercase tracking-widest opacity-80 mb-1">Brokerage Margin</p>
+                  <p className="text-3xl font-black">{defaultBrokerageFee}%</p>
+               </div>
             </div>
-          ))}
+
+            <div className="space-y-12 relative z-10">
+              <div className="space-y-6">
+                <div className="flex justify-between items-end">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Fee Multiplier</label>
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${defaultBrokerageFee > 15 ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                    {defaultBrokerageFee > 15 ? 'High Yield Zone' : 'Market Competitive'}
+                  </span>
+                </div>
+                
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="40" 
+                  step="0.5"
+                  value={defaultBrokerageFee} 
+                  onChange={(e) => {
+                    if (navigator.vibrate) navigator.vibrate(5);
+                    setDefaultBrokerageFee(Number(e.target.value));
+                  }} 
+                  className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-blue-600 focus:outline-none"
+                />
+                
+                <div className="flex justify-between px-1">
+                  {[1, 5, 10, 15, 20, 30, 40].map(val => (
+                    <button 
+                      key={val} 
+                      onClick={() => setDefaultBrokerageFee(val)} 
+                      className={`text-[9px] font-black transition-all ${defaultBrokerageFee === val ? 'text-blue-600 scale-125' : 'text-slate-400'}`}
+                    >
+                      {val}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-10 border-t border-slate-50 dark:border-slate-800">
+                <div className="space-y-6">
+                   <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                     Live Revenue Simulation
+                   </h4>
+                   <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-[10px] font-black uppercase mb-3 text-slate-400">
+                          <span>Sample Quote Value</span>
+                          <span className="text-slate-900 dark:text-white">${simValue.toLocaleString()}</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="1000" 
+                          max="100000" 
+                          step="1000"
+                          value={simValue} 
+                          onChange={(e) => setSimValue(Number(e.target.value))} 
+                          className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-slate-400"
+                        />
+                      </div>
+                      <div className="p-5 bg-slate-50 dark:bg-slate-800/40 rounded-3xl space-y-3">
+                         <div className="flex justify-between text-[10px] font-black uppercase">
+                            <span className="text-slate-400">Carrier Net Payment:</span>
+                            <span className="text-slate-900 dark:text-white">${simValue.toLocaleString()}</span>
+                         </div>
+                         <div className="flex justify-between text-[10px] font-black uppercase">
+                            <span className="text-slate-400">Platform Margin ({defaultBrokerageFee}%):</span>
+                            <span className="text-blue-600">+${((simValue * defaultBrokerageFee) / 100).toLocaleString()}</span>
+                         </div>
+                         <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+                         <div className="flex justify-between text-xs font-black uppercase">
+                            <span className="text-slate-900 dark:text-white">Billed to Client:</span>
+                            <span className="text-emerald-600">${(simValue + (simValue * defaultBrokerageFee) / 100).toLocaleString()}</span>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="space-y-6">
+                   <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                     Policy Guardrails
+                   </h4>
+                   <div className="space-y-4">
+                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
+                         <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-[10px] font-black">1</div>
+                         <p className="text-[10px] font-medium text-slate-500 leading-relaxed uppercase tracking-tight">Brokerage fees are applied globally and cannot be negotiated by partner carriers.</p>
+                      </div>
+                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
+                         <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-[10px] font-black">2</div>
+                         <p className="text-[10px] font-medium text-slate-500 leading-relaxed uppercase tracking-tight">Margins are automatically calculated on top of base carrier rates to protect partner profit.</p>
+                      </div>
+                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-center text-[9px] font-black text-slate-400 uppercase tracking-[0.4em]">Administrative protocol enforced globally</p>
         </div>
       )}
     </div>
