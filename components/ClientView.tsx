@@ -4,6 +4,7 @@ import { CARGO_TYPES } from '../constants';
 import { analyzeCargoRequest, getCurrencyInfoForLocation, preFlightRouteCheck, getCurrencyFromCoords } from '../services/geminiService';
 import RequestCard from './RequestCard';
 import CargoIcon from './CargoIcon';
+import PartnerProfileModal from './PartnerProfileModal';
 
 interface ClientViewProps {
   partners: LogisticsPartner[];
@@ -24,6 +25,7 @@ const ClientView: React.FC<ClientViewProps> = ({
   requests, 
   onSubmit, 
   blockedPartnerIds, 
+  onToggleBlockPartner,
   onUpdateStatus,
   onAddFeedback,
   paymentMethods,
@@ -34,8 +36,10 @@ const ClientView: React.FC<ClientViewProps> = ({
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [localCurrency, setLocalCurrency] = useState<{code: string, symbol: string}>({ code: 'USD', symbol: '$' });
   const [clientDetectedCurrency, setClientDetectedCurrency] = useState<string>('USD');
+  const [detectedRegion, setDetectedRegion] = useState<string>('');
   const [preFlightData, setPreFlightData] = useState<{ difficulty: number, estimatedDays: string, warning: string } | null>(null);
   const [isPreFlightLoading, setIsPreFlightLoading] = useState(false);
+  const [selectedProfilePartner, setSelectedProfilePartner] = useState<LogisticsPartner | null>(null);
 
   // Filtering States
   const [partnerSearch, setPartnerSearch] = useState('');
@@ -49,6 +53,7 @@ const ClientView: React.FC<ClientViewProps> = ({
         const info = await getCurrencyFromCoords(userLocation.lat, userLocation.lng);
         if (info) {
           setClientDetectedCurrency(info.code);
+          setDetectedRegion(info.region);
         }
       };
       detectCurrency();
@@ -181,21 +186,33 @@ const ClientView: React.FC<ClientViewProps> = ({
     }
   };
 
-  const inputClasses = (field: string) => `w-full rounded-2xl border px-5 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
+  // Enhanced input classes for better accessibility and focus states
+  const inputClasses = (field: string) => `w-full rounded-2xl border-2 px-5 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
     errors[field] 
-    ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10 text-rose-900 dark:text-rose-100 placeholder:text-rose-300' 
-    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
+    ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10 text-rose-900 dark:text-rose-100 placeholder:text-rose-400' 
+    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
   }`;
 
+  // Enhanced label with better legibility
   const Label = ({ htmlFor, children, error }: { htmlFor: string, children?: React.ReactNode, error?: string }) => (
     <div className="flex justify-between items-center mb-1.5 px-1">
-      <label htmlFor={htmlFor} className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{children}</label>
-      {error && <span className="text-[10px] font-black text-rose-500 uppercase tracking-tighter">{error}</span>}
+      <label htmlFor={htmlFor} className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{children}</label>
+      {error && <span className="text-[10px] font-black text-rose-600 dark:text-rose-50 uppercase tracking-tighter">{error}</span>}
     </div>
   );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start max-w-[1400px] mx-auto px-2">
+      {selectedProfilePartner && (
+        <PartnerProfileModal 
+          partner={selectedProfilePartner} 
+          requests={requests} 
+          onClose={() => setSelectedProfilePartner(null)}
+          isBlocked={blockedPartnerIds.includes(selectedProfilePartner.id)}
+          onToggleBlock={() => onToggleBlockPartner(selectedProfilePartner.id)}
+        />
+      )}
+
       <div className="lg:col-span-5 xl:col-span-4 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-8 shadow-2xl relative overflow-hidden transition-all flex flex-col min-h-[600px]">
         <div className="mb-10">
           <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mb-1">New Quote</h2>
@@ -232,6 +249,19 @@ const ClientView: React.FC<ClientViewProps> = ({
                     <Label htmlFor="clientEmail" error={errors.clientEmail}>Primary Email</Label>
                     <input id="clientEmail" type="email" placeholder="e.g. contact@hub.com" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
                   </div>
+                  
+                  {/* Regional Detection Confirmation UI */}
+                  {detectedRegion && (
+                    <div className="flex items-center gap-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded-2xl animate-in slide-in-from-bottom-2">
+                      <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" strokeWidth="2.5"/></svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest leading-none">Regional Detection</p>
+                        <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mt-1 truncate">Originating from {detectedRegion} · Preferred: {clientDetectedCurrency}</p>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {currentStep === 'route' && (
@@ -359,7 +389,7 @@ const ClientView: React.FC<ClientViewProps> = ({
                             setFormData({...formData, partnerId: p.id});
                             if ('vibrate' in navigator) navigator.vibrate(5);
                           }} 
-                          className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center gap-4 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-4 ring-blue-500/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'}`}
+                          className={`w-full p-4 rounded-2xl border transition-all text-left flex items-center gap-4 group/card relative ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 ring-4 ring-blue-500/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'}`}
                         >
                           <div className="relative">
                             <img src={p.logo} alt="" className="w-10 h-10 rounded-xl bg-slate-100 shadow-sm" />
@@ -378,7 +408,19 @@ const ClientView: React.FC<ClientViewProps> = ({
                             </div>
                             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter truncate">{p.specialization}</p>
                           </div>
-                          <div className={`w-4 h-4 rounded-full border-4 flex-shrink-0 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200 dark:border-slate-700'}`}></div>
+                          
+                          {/* Info Button Overlay */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProfilePartner(p);
+                            }}
+                            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-400 hover:text-blue-600"
+                          >
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                          </div>
+
+                          <div className={`w-4 h-4 rounded-full border-4 flex-shrink-0 ml-1 ${formData.partnerId === p.id ? 'border-blue-600 bg-blue-600' : 'border-slate-200 dark:border-slate-700'}`}></div>
                         </button>
                       ))
                     ) : (
@@ -419,7 +461,7 @@ const ClientView: React.FC<ClientViewProps> = ({
                   </div>
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Preference</p>
-                    <p className="text-xs font-black text-emerald-600 uppercase mt-1">Settle in {clientDetectedCurrency}</p>
+                    <p className="text-xs font-black text-emerald-600 uppercase mt-1">Settle in {clientDetectedCurrency} ({detectedRegion || 'Auto'})</p>
                   </div>
                 </div>
               )}
@@ -468,6 +510,9 @@ const ClientView: React.FC<ClientViewProps> = ({
                 onUpdateStatus={(status, ...args) => onUpdateStatus(req.id, status, ...args)} 
                 onAddFeedback={onAddFeedback}
                 paymentMethods={paymentMethods}
+                requests={requests} // Added for history in profile modal
+                blockedPartnerIds={blockedPartnerIds}
+                onToggleBlockPartner={onToggleBlockPartner}
               />
             ))
           )}

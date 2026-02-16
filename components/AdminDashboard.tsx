@@ -90,6 +90,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     </div>
   );
 
+  // Unified high-accessibility input style
+  const adminInputClasses = "bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all duration-300 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 hover:border-slate-300 dark:hover:border-slate-700 shadow-sm";
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -119,14 +122,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                placeholder="Search by client or ID..." 
                value={searchTerm} 
                onChange={(e) => setSearchTerm(e.target.value)} 
-               className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500/20" 
+               className={`flex-1 ${adminInputClasses}`}
              />
              <div className="flex gap-2">
                 {['ALL', 'PENDING', 'ACCEPTED', 'DELIVERED'].map(s => (
                   <button 
                     key={s} 
                     onClick={() => setFilterStatus(s)} 
-                    className={`px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterStatus === s ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400'}`}
+                    className={`px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${filterStatus === s ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 text-slate-400'}`}
                   >
                     {s}
                   </button>
@@ -201,8 +204,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onClick={() => onUpdatePartner?.(p.id, { availability: status })}
                         className={`flex-1 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest border transition-all ${
                           p.availability === status
-                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-md'
-                          : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-slate-200'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-2 border-slate-900 dark:border-white shadow-md'
+                          : 'bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-slate-200'
                         } ${isBlocked ? 'cursor-not-allowed opacity-50' : ''}`}
                       >
                         {status.slice(0, 5)}
@@ -214,8 +217,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     onClick={() => onToggleBlockPartner(p.id)}
                     className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
                       isBlocked 
-                      ? 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-900/40' 
-                      : 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-900/20 dark:border-rose-900/40 hover:bg-rose-600 hover:text-white'
+                      ? 'bg-blue-50 text-blue-600 border-2 border-blue-100 dark:bg-blue-900/20 dark:border-blue-900/40' 
+                      : 'bg-rose-50 text-rose-600 border-2 border-rose-100 dark:bg-rose-900/20 dark:border-rose-900/40 hover:bg-rose-600 hover:text-white'
                     }`}
                   >
                     {isBlocked ? 'Reactivate Carrier' : 'Suspend Carrier Node'}
@@ -247,7 +250,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Fee Multiplier</label>
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${defaultBrokerageFee > 15 ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border-2 ${defaultBrokerageFee > 15 ? 'bg-orange-100 text-orange-600 border-orange-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
                     {defaultBrokerageFee > 15 ? 'High Yield Zone' : 'Market Competitive'}
                   </span>
                 </div>
@@ -324,11 +327,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      Policy Guardrails
                    </h4>
                    <div className="space-y-4">
-                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
+                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl">
                          <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-[10px] font-black">1</div>
                          <p className="text-[10px] font-medium text-slate-500 leading-relaxed uppercase tracking-tight">Brokerage fees are applied globally and cannot be negotiated by partner carriers.</p>
                       </div>
-                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl">
+                      <div className="flex gap-4 p-4 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl">
                          <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 flex items-center justify-center text-[10px] font-black">2</div>
                          <p className="text-[10px] font-medium text-slate-500 leading-relaxed uppercase tracking-tight">Margins are automatically calculated on top of base carrier rates to protect partner profit.</p>
                       </div>

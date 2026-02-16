@@ -3,6 +3,7 @@ import { CargoQuoteRequest, RequestStatus, LogisticsPartner, Testimonial, Paymen
 import { generateQuotePDF } from '../services/pdfService';
 import { generateAIQuote, getCurrencyInfoForLocation, simulateTrackingPosition, geocodeLocation } from '../services/geminiService';
 import CargoIcon from './CargoIcon';
+import PartnerProfileModal from './PartnerProfileModal';
 
 declare const L: any;
 
@@ -18,6 +19,9 @@ interface RequestCardProps {
   onAddFeedback?: (partnerId: string, testimonial: Testimonial, requestId: string) => void;
   paymentMethods: PaymentMethod[];
   defaultBrokerageFee?: number;
+  requests?: CargoQuoteRequest[];
+  blockedPartnerIds?: string[];
+  onToggleBlockPartner?: (id: string) => void;
 }
 
 const DEFAULT_DETAILS_ORDER = [
@@ -42,7 +46,10 @@ const RequestCard: React.FC<RequestCardProps> = ({
   onUpdateStatus,
   onAddFeedback,
   paymentMethods,
-  defaultBrokerageFee = 10
+  defaultBrokerageFee = 10,
+  requests = [],
+  blockedPartnerIds = [],
+  onToggleBlockPartner
 }) => {
   const [totalPrice, setTotalPrice] = useState<number>(0);
   const [brokeragePercent, setBrokeragePercent] = useState<number>(defaultBrokerageFee);
@@ -52,6 +59,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
   const [isAiSuggesting, setIsAiSuggesting] = useState(false);
   const [detailsOrder, setDetailsOrder] = useState(DEFAULT_DETAILS_ORDER);
   const [showDocConfig, setShowDocConfig] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   // PDF customization states
   const [headerImage, setHeaderImage] = useState<string>('');
@@ -72,7 +80,6 @@ const RequestCard: React.FC<RequestCardProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
 
-  // Sync brokerage percent with global default whenever it changes
   useEffect(() => {
     setBrokeragePercent(defaultBrokerageFee);
   }, [defaultBrokerageFee]);
@@ -95,7 +102,6 @@ const RequestCard: React.FC<RequestCardProps> = ({
     if ('vibrate' in navigator) navigator.vibrate(10);
     const suggestion = await generateAIQuote(request.origin, request.destination, request.cargoType, request.weight);
     if (suggestion) {
-      // AI returns a suggestion for the total price including platform margins
       setTotalPrice(suggestion.price);
       setPartnerCurrency(suggestion.currency);
     }
@@ -166,19 +172,44 @@ const RequestCard: React.FC<RequestCardProps> = ({
     [RequestStatus.DENIED]: 'bg-rose-100 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border-rose-200',
   };
 
-  const labelClasses = "text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5";
-  const inputClasses = "w-full bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-4 py-2.5 text-xs font-black text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-all duration-300 shadow-sm placeholder:opacity-30";
+  const labelClasses = "text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1.5 px-1";
+  
+  // High-accessibility border-2 input styling matched to ClientView
+  const inputClasses = "w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:border-blue-600 dark:focus:border-blue-500 outline-none transition-all duration-300 shadow-sm placeholder:opacity-30 focus:ring-4 focus:ring-blue-500/10 hover:border-slate-300 dark:hover:border-slate-700";
 
   return (
     <div className={`group relative bg-white dark:bg-slate-900 rounded-[2rem] border transition-all duration-500 h-full flex flex-col hover:shadow-2xl hover:-translate-y-1 ${request.status === RequestStatus.PENDING ? 'border-amber-200 dark:border-amber-900/40 shadow-xl shadow-amber-500/5' : 'border-slate-100 dark:border-slate-800 shadow-sm'}`}>
+      {showProfile && partner && (
+        <PartnerProfileModal 
+          partner={partner} 
+          requests={requests} 
+          onClose={() => setShowProfile(false)}
+          isBlocked={blockedPartnerIds.includes(partner.id)}
+          onToggleBlock={() => onToggleBlockPartner?.(partner.id)}
+        />
+      )}
+
       <div className="p-8 flex-grow">
         <div className="flex justify-between items-start mb-8">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-blue-600 shadow-sm transform transition-transform group-hover:scale-110">
-              <CargoIcon type={request.cargoType} className="w-6 h-6" />
-            </div>
+            <button 
+              onClick={() => partner && setShowProfile(true)}
+              className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-blue-600 shadow-sm transform transition-transform group-hover:scale-110 overflow-hidden border border-slate-100 dark:border-slate-700 active:scale-95"
+            >
+              {partner?.logo ? <img src={partner.logo} alt="" className="w-full h-full object-cover" /> : <CargoIcon type={request.cargoType} className="w-6 h-6" />}
+            </button>
             <div>
-              <span className={`px-3 py-1 rounded-full text-[9px] font-black border transition-colors ${statusStyles[request.status]}`}>{request.status}</span>
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black border transition-colors ${statusStyles[request.status]}`}>{request.status}</span>
+                {partner && (
+                  <button 
+                    onClick={() => setShowProfile(true)}
+                    className="text-[9px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors flex items-center gap-1"
+                  >
+                    {partner.name} dossiers ⓘ
+                  </button>
+                )}
+              </div>
               <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">ID: {request.id.split('-').pop()}</p>
             </div>
           </div>
@@ -210,7 +241,10 @@ const RequestCard: React.FC<RequestCardProps> = ({
           <div className="mt-4 space-y-4">
             <div className="p-6 bg-blue-50/40 dark:bg-blue-900/5 rounded-3xl border border-blue-100/50 dark:border-blue-900/20 animate-in zoom-in-95 duration-500">
               <div className="flex justify-between items-center mb-6">
-                <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Quote Setup</h4>
+                <div>
+                  <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">Quote Setup</h4>
+                  {request.suggestedCurrency && <p className="text-[8px] font-bold text-slate-400 mt-1 uppercase">Client Preferred: {request.suggestedCurrency}</p>}
+                </div>
                 <button 
                   onClick={handleAiSuggest} 
                   disabled={isAiSuggesting}
@@ -223,19 +257,19 @@ const RequestCard: React.FC<RequestCardProps> = ({
               <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <label className={labelClasses}>Full Quote Price (Brokerage Included)</label>
+                    <label className={labelClasses}>Full Quote Price</label>
                     <div className="flex gap-2">
                       <input 
                         type="number" 
                         value={totalPrice || ''} 
                         onChange={(e) => setTotalPrice(Number(e.target.value))} 
-                        className={inputClasses}
+                        className={`${inputClasses} flex-grow`}
                         placeholder="0.00"
                       />
                       <select 
                         value={partnerCurrency} 
                         onChange={(e) => setPartnerCurrency(e.target.value)}
-                        className="bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-2 text-[10px] font-black text-blue-600 uppercase outline-none"
+                        className="bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 rounded-2xl px-4 text-[10px] font-black text-blue-600 uppercase outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 transition-all"
                       >
                         {COMMON_CURRENCIES.map(curr => <option key={curr} value={curr}>{curr}</option>)}
                       </select>
@@ -257,7 +291,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
             </div>
 
             {/* Document Config Expandable Section */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+            <div className="bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm">
                <button 
                  onClick={() => setShowDocConfig(!showDocConfig)}
                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -292,7 +326,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
                        <textarea 
                          value={customNotes} 
                          onChange={(e) => setCustomNotes(e.target.value)} 
-                         className={`${inputClasses} h-16 resize-none`}
+                         className={`${inputClasses} h-24 resize-none`}
                          placeholder="Handling instructions..."
                        />
                     </div>
@@ -301,7 +335,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
                        <textarea 
                          value={customTerms} 
                          onChange={(e) => setCustomTerms(e.target.value)} 
-                         className={`${inputClasses} h-16 resize-none`}
+                         className={`${inputClasses} h-24 resize-none`}
                          placeholder="Payment due in 7 days..."
                        />
                     </div>
@@ -340,7 +374,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
                 <button key={star} onClick={() => setFeedbackRating(star)} className={`text-xl ${star <= feedbackRating ? 'text-amber-500' : 'text-slate-200'}`}>★</button>
               ))}
             </div>
-            <textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Delivery experience..." className="w-full bg-white dark:bg-slate-900 border border-amber-100 rounded-xl p-3 text-xs focus:ring-0 outline-none h-20 resize-none mb-3" />
+            <textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Delivery experience..." className={`${inputClasses} h-20 resize-none mb-3`} />
             <button onClick={handleFeedbackSubmit} disabled={isSubmittingFeedback} className="w-full py-2 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase">Submit Evaluation</button>
           </div>
         )}
@@ -349,7 +383,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
       <div className="p-8 pt-0 mt-auto">
         {showActions && request.status === RequestStatus.PENDING ? (
           <div className="flex gap-3">
-            <button onClick={onDeny} className="flex-1 py-3 text-[10px] font-black text-slate-400 uppercase border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">Decline</button>
+            <button onClick={onDeny} className="flex-1 py-3 text-[10px] font-black text-slate-400 uppercase border-2 border-slate-200 rounded-xl hover:bg-slate-50 transition-all">Decline</button>
             <button 
               onClick={() => onAccept && onAccept(totalPrice, partnerCurrency, customNotes, customTerms, partner?.logo || '', detailsOrder.map(d => d.id), true, brokerFeeAmount, brokeragePercent, selectedPaymentId, headerImage, headerMessage)}
               disabled={totalPrice <= 0}
@@ -361,7 +395,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
         ) : showClientActions && request.status === RequestStatus.ACCEPTED ? (
           <button onClick={() => onUpdateStatus && onUpdateStatus(RequestStatus.DELIVERED)} className="w-full py-3.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-xl hover:bg-emerald-700 active:scale-95 transition-all">Confirm Cargo Reception</button>
         ) : request.status === RequestStatus.DELIVERED && request.feedbackProvided ? (
-          <div className="text-center py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800">
+          <div className="text-center py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border-2 border-emerald-100 dark:border-emerald-800">
             <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">✓ Evaluation Recorded</p>
           </div>
         ) : (

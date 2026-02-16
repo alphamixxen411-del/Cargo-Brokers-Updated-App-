@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { CargoQuoteRequest } from "../types";
 
@@ -40,7 +39,6 @@ const saveMapCache = (key: string, cache: Map<string, any>) => {
 };
 
 const executeWithRetry = async <T>(fn: () => Promise<T>, retries = 5, delay = 2000): Promise<T> => {
-  // CRITICAL: Immediate check for offline status to avoid hanging
   if (!navigator.onLine) {
     throw new Error('NETWORK_OFFLINE');
   }
@@ -86,18 +84,18 @@ export const getCurrencyInfoForLocation = async (location: string): Promise<{ co
   }
 };
 
-export const getCurrencyFromCoords = async (lat: number, lng: number): Promise<{ code: string, symbol: string } | null> => {
+export const getCurrencyFromCoords = async (lat: number, lng: number): Promise<{ code: string, symbol: string, region: string } | null> => {
   try {
     return await executeWithRetry(async () => {
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Given coordinates ${lat}, ${lng}, what is the likely official currency code and symbol? JSON ONLY: {"code": "USD", "symbol": "$"}.`,
+        contents: `Given coordinates ${lat}, ${lng}, what is the likely official currency code, symbol, and general region name? JSON ONLY: {"code": "USD", "symbol": "$", "region": "North America"}.`,
         config: { responseMimeType: "application/json" },
       });
       return JSON.parse(response.text.trim());
     });
   } catch (error) {
-    return { code: 'USD', symbol: '$' };
+    return { code: 'USD', symbol: '$', region: 'Global Hub' };
   }
 };
 
