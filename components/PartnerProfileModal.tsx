@@ -15,17 +15,38 @@ interface PartnerProfileModalProps {
 
 const AvailabilityBadge = ({ status }: { status: AvailabilityStatus }) => {
   const config = {
-    AVAILABLE: { color: 'bg-emerald-500', label: 'Capacity: Available', ping: true },
-    LIMITED: { color: 'bg-amber-500', label: 'Capacity: Limited', ping: false },
-    UNAVAILABLE: { color: 'bg-rose-500', label: 'Capacity: Full', ping: false }
+    AVAILABLE: { 
+      color: 'bg-emerald-500', 
+      label: 'Capacity: Available',
+      icon: (
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+      )
+    },
+    LIMITED: { 
+      color: 'bg-amber-500', 
+      label: 'Capacity: Limited',
+      icon: (
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2v20c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
+        </svg>
+      )
+    },
+    UNAVAILABLE: { 
+      color: 'bg-rose-500', 
+      label: 'Capacity: Full',
+      icon: (
+        <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+      )
+    }
   };
-  const { color, label, ping } = config[status];
+  const { color, label, icon } = config[status];
   return (
     <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white ${color} shadow-lg shadow-black/5`}>
-      <div className="relative flex h-1.5 w-1.5">
-        {ping && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>}
-        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-      </div>
+      {icon}
       {label}
     </div>
   );
@@ -47,79 +68,103 @@ const CoverageMap: React.FC<{ areas: string[], hub: string }> = ({ areas, hub })
         return coords ? { ...coords, name: area } : null;
       });
       const results = (await Promise.all(coordPromises)).filter((c): c is { lat: number, lng: number, name: string } => c !== null);
-      if (!isMounted || results.length === 0) { setLoading(false); return; }
+      if (!isMounted) return;
+      
       try {
-        if (mapRef.current) mapRef.current.remove();
+        if (mapRef.current) {
+          mapRef.current.remove();
+          mapRef.current = null;
+        }
+        
         if (!mapContainerRef.current) return;
 
-        const map = L.map(mapContainerRef.current, { zoomControl: false, attributionControl: false }).setView([20, 0], 2);
+        const map = L.map(mapContainerRef.current, { 
+          zoomControl: true, 
+          attributionControl: false,
+          scrollWheelZoom: false
+        }).setView([20, 0], 2);
+        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
         const markers: any[] = [];
+        
         if (hubCoords) {
-          const hubIcon = L.divIcon({ className: 'custom-div-icon', html: `<div class="relative flex items-center justify-center"><div class="absolute w-12 h-12 bg-lime-500/20 rounded-full animate-pulse"></div><div class="relative w-5 h-5 bg-lime-600 rounded-full border-2 border-white shadow-lg"></div></div>`, iconSize: [40, 40], iconAnchor: [20, 20] });
-          markers.push(L.marker([hubCoords.lat, hubCoords.lng], { icon: hubIcon }).addTo(map).bindPopup(`Hub: ${hub}`));
+          const hubIcon = L.divIcon({ 
+            className: 'custom-div-icon', 
+            html: `<div class="relative flex items-center justify-center"><div class="absolute w-12 h-12 bg-lime-500/20 rounded-full animate-pulse"></div><div class="relative w-5 h-5 bg-lime-600 rounded-full border-2 border-white shadow-lg"></div></div>`, 
+            iconSize: [40, 40], 
+            iconAnchor: [20, 20] 
+          });
+          const hubMarker = L.marker([hubCoords.lat, hubCoords.lng], { icon: hubIcon }).addTo(map);
+          hubMarker.bindPopup(`<div class="p-2 font-black text-xs uppercase tracking-widest text-slate-800">Primary Hub: ${hub}</div>`);
+          markers.push(hubMarker);
         }
+
         results.forEach((res) => {
-          const areaIcon = L.divIcon({ className: 'custom-div-icon', html: `<div class="relative flex items-center justify-center"><div class="absolute w-8 h-8 bg-blue-500/10 rounded-full"></div><div class="relative w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-md"></div></div>`, iconSize: [32, 32], iconAnchor: [16, 16] });
-          markers.push(L.marker([res.lat, res.lng], { icon: areaIcon }).addTo(map).bindPopup(res.name));
-          if (hubCoords) L.polyline([[hubCoords.lat, hubCoords.lng], [res.lat, res.lng]], { color: '#3b82f6', weight: 1, opacity: 0.4, dashArray: '5, 10' }).addTo(map);
+          const areaIcon = L.divIcon({ 
+            className: 'custom-div-icon', 
+            html: `<div class="relative flex items-center justify-center"><div class="absolute w-8 h-8 bg-blue-500/10 rounded-full"></div><div class="relative w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-md"></div></div>`, 
+            iconSize: [32, 32], 
+            iconAnchor: [16, 16] 
+          });
+          const areaMarker = L.marker([res.lat, res.lng], { icon: areaIcon }).addTo(map);
+          areaMarker.bindPopup(`<div class="p-2 font-black text-xs uppercase tracking-widest text-blue-600">Service Area: ${res.name}</div>`);
+          markers.push(areaMarker);
+          
+          if (hubCoords) {
+            L.polyline([[hubCoords.lat, hubCoords.lng], [res.lat, res.lng]], { 
+              color: '#3b82f6', 
+              weight: 1.5, 
+              opacity: 0.4, 
+              dashArray: '5, 10' 
+            }).addTo(map);
+          }
         });
-        const group = new L.featureGroup(markers);
-        map.fitBounds(group.getBounds(), { padding: [40, 40] });
+
+        if (markers.length > 0) {
+          const group = new L.featureGroup(markers);
+          map.fitBounds(group.getBounds(), { padding: [40, 40] });
+        }
+        
         mapRef.current = map;
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) { 
+        console.error("Map Error:", err); 
+      } finally { 
+        setLoading(false); 
+      }
     };
+    
     initCoverageMap();
-    return () => { isMounted = false; if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+    return () => { 
+      isMounted = false; 
+      if (mapRef.current) { 
+        mapRef.current.remove(); 
+        mapRef.current = null; 
+      } 
+    };
   }, [areas, hub]);
 
   return (
-    <div className="relative w-full h-48 sm:h-64 bg-slate-50 dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner transition-colors">
+    <div className="relative w-full h-64 sm:h-80 bg-slate-50 dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-inner group transition-all">
       {loading && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 overflow-hidden">
-          {/* Tactical Map Grid */}
-          <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.12]">
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-              <pattern id="tactical-grid-coverage" width="30" height="30" patternUnits="userSpaceOnUse">
-                <path d="M 30 0 L 0 0 0 30" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                <circle cx="15" cy="15" r="0.5" fill="currentColor" />
-              </pattern>
-              <rect width="100%" height="100%" fill="url(#tactical-grid-coverage)" />
-            </svg>
-          </div>
-          
-          <div className="relative flex flex-col items-center">
-            {/* Concentric Pulsing Rings */}
-            <div className="absolute w-48 h-48 border border-blue-500/10 rounded-full animate-ping duration-[4000ms]"></div>
-            <div className="absolute w-36 h-36 border border-blue-400/10 rounded-full animate-ping duration-[3000ms]"></div>
-            <div className="absolute w-24 h-24 bg-blue-500/5 rounded-full animate-pulse duration-[2000ms]"></div>
-            
-            <div className="relative flex flex-col items-center">
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-bounce duration-[2000ms]">
-                <svg className="w-8 h-8 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              
-              <div className="mt-6 flex flex-col items-center">
-                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] animate-pulse">
-                  Compiling Coverage
-                </p>
-                <div className="mt-2 w-32 h-0.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500/40 animate-[loading_2s_infinite]"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="absolute inset-0 z-[400] flex flex-col items-center justify-center bg-white dark:bg-slate-950">
+          <div className="w-10 h-10 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Plotting Coverage Nodes...</p>
         </div>
       )}
-      <div ref={mapContainerRef} className="w-full h-full" />
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes loading {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}} />
+      <div ref={mapContainerRef} className="w-full h-full z-[300]" />
+      <div className="absolute bottom-4 left-4 z-[401] flex flex-col gap-2">
+         <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl pointer-events-none">
+            <div className="flex items-center gap-2 mb-1">
+               <div className="w-2 h-2 rounded-full bg-lime-500"></div>
+               <span className="text-[8px] font-black uppercase text-slate-600 dark:text-slate-400">Headquarters</span>
+            </div>
+            <div className="flex items-center gap-2">
+               <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+               <span className="text-[8px] font-black uppercase text-slate-600 dark:text-slate-400">Regional Coverage</span>
+            </div>
+         </div>
+      </div>
     </div>
   );
 };
@@ -168,19 +213,32 @@ const PartnerProfileModal: React.FC<PartnerProfileModalProps> = ({ partner, requ
                 </div>
               </div>
             </div>
-            <div className="mb-8"><CoverageMap areas={partner.serviceAreas} hub={partner.location} /></div>
+
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Interactive Network Coverage</h4>
+                <div className="flex items-center gap-2">
+                   <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                   <span className="text-[9px] font-black text-blue-500 uppercase">Live Routing Mesh</span>
+                </div>
+              </div>
+              <CoverageMap areas={partner.serviceAreas} hub={partner.location} />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
               <div>
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Base of Operations</h4>
-                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="block p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-colors">
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="block p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-colors group">
                   <p className="text-sm font-bold text-slate-900 dark:text-white">{partner.location}</p>
-                  <p className="text-[10px] text-blue-600 mt-1 uppercase font-black">View Map &rarr;</p>
+                  <p className="text-[10px] text-blue-600 mt-1 uppercase font-black group-hover:translate-x-1 transition-transform">View Hub Details &rarr;</p>
                 </a>
               </div>
               <div>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Contact</h4>
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{partner.email}</p>
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">{partner.phone}</p>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Node Connectivity</h4>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{partner.email}</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{partner.phone}</p>
+                </div>
               </div>
             </div>
 
@@ -237,17 +295,20 @@ const PartnerProfileModal: React.FC<PartnerProfileModalProps> = ({ partner, requ
                     <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[70%]">{req.origin} &rarr; {req.destination}</p>
                     <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded ring-1 ring-emerald-200/50">{req.status}</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
-                     <CargoIcon type={req.cargoType} className="w-3 h-3 text-slate-400" />
-                     <span className="text-[9px] text-slate-400 font-bold uppercase">{req.cargoType} · {req.weight}kg</span>
+                  <div className="flex items-center gap-2 mt-3">
+                     <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                        <CargoIcon type={req.cargoType} className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                        <span className="text-[9px] text-slate-700 dark:text-slate-300 font-black uppercase tracking-tight">{req.cargoType}</span>
+                     </div>
+                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">• {req.weight}{req.weightUnit || 'kg'}</span>
                   </div>
-                  <div className="mt-2 text-[8px] font-bold text-slate-400 uppercase">
+                  <div className="mt-3 pt-2 border-t border-slate-50 dark:border-slate-800/50 text-[8px] font-bold text-slate-400 uppercase">
                     Completed on {new Date(req.createdAt).toLocaleDateString()}
                   </div>
                 </div>
               ))
             ) : (
-              <div className="p-12 text-center">
+              <div className="p-12 text-center bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
                 <p className="text-xs text-slate-400 italic">No historical shipment data available.</p>
               </div>
             )}
@@ -306,12 +367,12 @@ const PartnerProfileModal: React.FC<PartnerProfileModalProps> = ({ partner, requ
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-md transition-opacity" aria-modal="true" role="dialog">
       <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 relative">
-        <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex justify-between items-center z-10">
-          <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Partner Dossier</h3>
+        <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 p-4 sm:p-6 flex justify-between items-center z-50">
+          <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Partner Dossier</h3>
           <div className="flex items-center gap-3">
             <AvailabilityBadge status={partner.availability} />
             <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-slate-500">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>

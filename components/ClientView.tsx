@@ -186,20 +186,43 @@ const ClientView: React.FC<ClientViewProps> = ({
     }
   };
 
-  // Enhanced input classes for better accessibility and focus states
   const inputClasses = (field: string) => `w-full rounded-2xl border-2 px-5 py-4 text-sm font-bold transition-all duration-300 outline-none shadow-sm appearance-none ${
     errors[field] 
     ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/10 text-rose-900 dark:text-rose-100 placeholder:text-rose-400' 
     : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-blue-600 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'
   }`;
 
-  // Enhanced label with better legibility
   const Label = ({ htmlFor, children, error }: { htmlFor: string, children?: React.ReactNode, error?: string }) => (
     <div className="flex justify-between items-center mb-1.5 px-1">
       <label htmlFor={htmlFor} className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{children}</label>
       {error && <span className="text-[10px] font-black text-rose-600 dark:text-rose-50 uppercase tracking-tighter">{error}</span>}
     </div>
   );
+
+  const AvailabilityIcon = ({ status, className = "w-2.5 h-2.5" }: { status: AvailabilityStatus, className?: string }) => {
+    switch(status) {
+      case 'AVAILABLE':
+        return (
+          <svg className={`${className} text-emerald-500`} viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        );
+      case 'LIMITED':
+        return (
+          <svg className={`${className} text-amber-500`} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2v20c5.523 0 10-4.477 10-10S17.523 2 12 2z"/>
+          </svg>
+        );
+      case 'UNAVAILABLE':
+        return (
+          <svg className={`${className} text-rose-500`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start max-w-[1400px] mx-auto px-2">
@@ -250,7 +273,6 @@ const ClientView: React.FC<ClientViewProps> = ({
                     <input id="clientEmail" type="email" placeholder="e.g. contact@hub.com" value={formData.clientEmail} onChange={e => setFormData({...formData, clientEmail: e.target.value})} className={inputClasses('clientEmail')} />
                   </div>
                   
-                  {/* Regional Detection Confirmation UI */}
                   {detectedRegion && (
                     <div className="flex items-center gap-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded-2xl animate-in slide-in-from-bottom-2">
                       <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white shrink-0">
@@ -333,7 +355,6 @@ const ClientView: React.FC<ClientViewProps> = ({
                 <div className="flex flex-col h-[400px]">
                   <Label htmlFor="partnerSelect" error={errors.partnerId}>Carrier Selection Network</Label>
                   
-                  {/* Partner Filters UI */}
                   <div className="mb-4 space-y-3">
                     <div className="relative">
                       <input 
@@ -398,9 +419,7 @@ const ClientView: React.FC<ClientViewProps> = ({
                             <div className="flex items-center justify-between mb-0.5">
                               <div className="flex items-center gap-2 truncate">
                                 <p className="text-xs font-black text-slate-900 dark:text-white truncate">{p.name}</p>
-                                <div className={`w-2 h-2 rounded-full flex-shrink-0 animate-pulse ${
-                                  p.availability === 'AVAILABLE' ? 'bg-emerald-500' : p.availability === 'LIMITED' ? 'bg-amber-500' : 'bg-rose-500'
-                                }`}></div>
+                                <AvailabilityIcon status={p.availability} />
                               </div>
                               <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                                 <span className="text-[10px] font-black text-amber-500">★ {p.rating}</span>
@@ -409,7 +428,6 @@ const ClientView: React.FC<ClientViewProps> = ({
                             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter truncate">{p.specialization}</p>
                           </div>
                           
-                          {/* Info Button Overlay */}
                           <div 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -433,35 +451,47 @@ const ClientView: React.FC<ClientViewProps> = ({
                 </div>
               )}
               {currentStep === 'review' && (
-                <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white"><CargoIcon type={formData.cargoType} className="w-5 h-5" /></div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selected Payload</p>
-                      <p className="text-xs font-black text-slate-900 dark:text-white uppercase">{formData.cargoType}</p>
+                <div className="p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 space-y-8">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20 mb-4 animate-in zoom-in duration-300">
+                      <CargoIcon type={formData.cargoType} className="w-8 h-8" />
+                    </div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Payload Assignment</p>
+                    <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{formData.cargoType}</p>
+                  </div>
+                  
+                  <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-left">Routing Hubs</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white leading-tight">{formData.origin} &rarr; {formData.destination}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Mass</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white">{formData.weight}{formData.weightUnit}</p>
+                      </div>
+                      <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ETD</p>
+                        <p className="text-xs font-black text-slate-900 dark:text-white">{formData.preferredDate}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Routing Hubs</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{formData.origin} &rarr; {formData.destination}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
+
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Net Mass</p>
-                      <p className="text-xs font-black text-slate-900 dark:text-white">{formData.weight}{formData.weightUnit}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selected Carrier</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-xs font-black text-blue-600 uppercase">{partners.find(p => p.id === formData.partnerId)?.name}</p>
+                        {formData.partnerId && <AvailabilityIcon status={partners.find(p => p.id === formData.partnerId)!.availability} />}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ETD</p>
-                      <p className="text-xs font-black text-slate-900 dark:text-white">{formData.preferredDate}</p>
+                    <div className="text-right">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Settlement</p>
+                      <p className="text-xs font-black text-emerald-600 uppercase mt-1">{clientDetectedCurrency}</p>
                     </div>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned Carrier</p>
-                    <p className="text-xs font-black text-blue-600 uppercase mt-1">{partners.find(p => p.id === formData.partnerId)?.name}</p>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Local Preference</p>
-                    <p className="text-xs font-black text-emerald-600 uppercase mt-1">Settle in {clientDetectedCurrency} ({detectedRegion || 'Auto'})</p>
                   </div>
                 </div>
               )}
@@ -510,7 +540,7 @@ const ClientView: React.FC<ClientViewProps> = ({
                 onUpdateStatus={(status, ...args) => onUpdateStatus(req.id, status, ...args)} 
                 onAddFeedback={onAddFeedback}
                 paymentMethods={paymentMethods}
-                requests={requests} // Added for history in profile modal
+                requests={requests} 
                 blockedPartnerIds={blockedPartnerIds}
                 onToggleBlockPartner={onToggleBlockPartner}
               />

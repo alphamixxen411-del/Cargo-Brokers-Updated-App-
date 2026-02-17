@@ -173,8 +173,6 @@ const RequestCard: React.FC<RequestCardProps> = ({
   };
 
   const labelClasses = "text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block mb-1.5 px-1";
-  
-  // High-accessibility border-2 input styling matched to ClientView
   const inputClasses = "w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-4 text-sm font-bold text-slate-900 dark:text-white focus:border-blue-600 dark:focus:border-blue-500 outline-none transition-all duration-300 shadow-sm placeholder:opacity-30 focus:ring-4 focus:ring-blue-500/10 hover:border-slate-300 dark:hover:border-slate-700";
 
   return (
@@ -224,16 +222,33 @@ const RequestCard: React.FC<RequestCardProps> = ({
         </div>
 
         <div className="space-y-6 mb-8">
+          {/* Main Route Segment */}
           <div className="flex items-center gap-5">
             <div className="flex flex-col items-center gap-1 py-1 shrink-0">
               <div className="w-2.5 h-2.5 rounded-full border-2 border-blue-500"></div>
-              <div className="w-0.5 h-10 border-l-2 border-dashed border-slate-100 dark:border-slate-800"></div>
+              <div className="w-0.5 h-12 border-l-2 border-dashed border-slate-100 dark:border-slate-800"></div>
               <div className="w-2.5 h-2.5 rounded-full bg-slate-900 dark:bg-white"></div>
             </div>
             <div className="flex-1 min-w-0 space-y-4">
               <div className="truncate"><p className={labelClasses}>Origin Point</p><p className="text-xs font-black tracking-tight truncate">{request.origin}</p></div>
               <div className="truncate"><p className={labelClasses}>Final Destination</p><p className="text-xs font-black tracking-tight truncate">{request.destination}</p></div>
             </div>
+          </div>
+
+          {/* Payload Summary Badge */}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                <CargoIcon type={request.cargoType} className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight">{request.cargoType}</span>
+             </div>
+             <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">{request.weight}{request.weightUnit || 'kg'}</span>
+             </div>
+             {request.dimensions && (
+               <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                  <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight truncate max-w-[80px]">{request.dimensions}</span>
+               </div>
+             )}
           </div>
         </div>
 
